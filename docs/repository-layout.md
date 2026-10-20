@@ -66,7 +66,10 @@ shipped app CSS.
 
 `dev/index.html` and `dev/dev.mjs` are the read-only fixture harness. `dev/write.html`,
 `dev/write.mjs` and `src/screens/works-write.mjs` are the dev write page. The
-write page calls only the local reference host; it is not an installed screen.
+write page calls only a loopback reference host and refuses a non-loopback
+`host` override before any request; it is not an installed screen. It edits the
+title only, preserving existing content, and uses the host's `changes` decision
+value.
 IBM Plex is loaded from Google Fonts for design fidelity.
 
 ## Read path

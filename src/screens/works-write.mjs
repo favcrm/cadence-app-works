@@ -3,6 +3,20 @@ import { createHostClient, HostClientError } from "../host/client.mjs";
 import { mountWorks } from "./works.mjs";
 
 const DEFAULT_HOST = "http://127.0.0.1:4174";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+const isLoopbackHost = (value) => {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  if (url.username || url.password || url.search || url.hash) return false;
+  if (url.pathname !== "/") return false;
+  return LOOPBACK_HOSTS.has(url.hostname);
+};
 
 const el = (tag, attrs = {}, ...children) => {
   const node = document.createElement(tag);
@@ -21,17 +35,6 @@ const el = (tag, attrs = {}, ...children) => {
     node.append(child.nodeType ? child : document.createTextNode(String(child)));
   }
   return node;
-};
-
-const bodyFrom = (item) => {
-  if (item.kind === "doc") {
-    return item.blocks
-      .filter((block) => block.type !== "h2")
-      .map((block) => block.text)
-      .join("\n\n");
-  }
-  if (item.kind === "deck") return item.slides.map((slide) => slide.body).join("\n\n");
-  return item.rows.map((row) => row.map((cell) => String(cell)).join(", ")).join("\n");
 };
 
 const contentFrom = (kind, title, body, base) => {
@@ -152,8 +155,7 @@ const openDialog = (title, fields, submitLabel) =>
 export async function mountWorksWrite(root, { host, status, feedback, actorInput } = {}) {
   if (!root) throw new Error("mountWorksWrite requires a root");
   const params = new URLSearchParams(globalThis.location?.search ?? "");
-  const base = host || params.get("host") || DEFAULT_HOST;
-  const client = createHostClient(base);
+  const requestedHost = host || params.get("host") || DEFAULT_HOST;
   const author = () => actorInput?.value.trim() || "author-1";
   const nextKey = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
 
@@ -174,15 +176,53 @@ export async function mountWorksWrite(root, { host, status, feedback, actorInput
     status.dataset.tone = tone;
   };
 
+  if (!isLoopbackHost(requestedHost)) {
+    setStatus(`refused non-loopback host: ${requestedHost}`, "error");
+    showFeedback("Only a loopback reference host is allowed.", "error");
+    return null;
+  }
+  const base = requestedHost;
+  const client = createHostClient(base);
+
   let reader = createContentReader([]);
+  const hostRows = new Map();
+  const hostDetails = new Map();
+
+  const hostView = (row) => {
+    const host = hostRows.get(row.id);
+    if (!host) return row;
+    return {
+      ...row,
+      reviewState: host.reviewStatus === "changes_requested" ? "edited" : host.reviewState,
+      exportState: host.exportState,
+      reviewStatus: host.reviewStatus,
+    };
+  };
+
   const content = {
-    list: (options) => reader.list(options),
-    get: (id) => reader.get(id),
+    list: (options) => reader.list(options).map(hostView),
+    get: (id) => {
+      const detail = reader.get(id);
+      const host = hostDetails.get(id);
+      if (!host) return detail;
+      return {
+        ...detail,
+        reviewState: host.reviewStatus === "changes_requested" ? "edited" : host.reviewState,
+        exportState: host.exportState,
+        exportReason: host.exportReason,
+        reviewStatus: host.reviewStatus,
+        reviewRequestedRevision: host.reviewRequestedRevision,
+      };
+    },
   };
 
   const reload = async () => {
     const rows = await client.list({ query: "" });
     const details = await Promise.all(rows.map((row) => client.get(row.id)));
+    hostRows.clear();
+    hostDetails.clear();
+    for (const row of rows) hostRows.set(row.id, row);
+    for (const detail of details) hostDetails.set(detail.id, detail);
     reader = createContentReader(details);
   };
 
@@ -264,20 +304,14 @@ export async function mountWorksWrite(root, { host, status, feedback, actorInput
     async edit(item) {
       const values = await openDialog(
         `Edit ${item.title}`,
-        [
-          { name: "title", label: "Title", value: item.title, required: true },
-          { name: "body", label: "Body", type: "textarea", value: bodyFrom(item) },
-        ],
+        [{ name: "title", label: "Title", value: item.title, required: true }],
         "Save revision",
       );
       if (!values) return;
       const saved = await run(() =>
         client.patch(item.id, {
           ifRevision: item.revision,
-          operations: [
-            { type: "set_title", title: values.title },
-            { type: "set_content", content: contentFrom(item.kind, values.title, values.body, item) },
-          ],
+          operations: [{ type: "set_title", title: values.title }],
           actor: author(),
           key: nextKey(`patch-${item.id}`),
         }),
@@ -317,7 +351,7 @@ export async function mountWorksWrite(root, { host, status, feedback, actorInput
             type: "select",
             options: [
               ["approve", "Approve"],
-              ["changes_requested", "Request changes"],
+              ["changes", "Request changes"],
             ],
             value: "approve",
           },

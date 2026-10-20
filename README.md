@@ -88,12 +88,14 @@ python3 -m http.server 4173
 # optional: ?host=http://127.0.0.1:4174&theme=light
 ```
 
-The page shows the host connection and an explicit actor. It creates docs,
-sheets and decks, edits with the current revision, requests review, records an
-independent reviewer decision, exports only a reviewed current revision, and
-trashes/restores. A stale edit shows the conflict and reloads the current
-content. This is a dev page; the read-only screen and app manifest remain
-write-free.
+Only loopback hosts are accepted; a non-loopback `host` is refused before any
+request. The page shows the host connection and an explicit actor, creates docs,
+sheets and decks, edits the title with the current revision, requests review,
+records an independent reviewer decision (`changes` or `approve`), exports only
+a reviewed current revision, trashes/restores, and reloads after a stale edit
+conflict. It does not rewrite document bodies, so existing content is never
+flattened by the editor. This is a dev page; the read-only screen and app
+manifest remain write-free.
 
 ## Check
 
