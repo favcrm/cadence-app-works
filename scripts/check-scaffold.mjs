@@ -21,12 +21,15 @@ const required = [
   "design/mockup/kit.css",
   "src/content/fixtures.mjs",
   "src/content/reader.mjs",
+  "src/contract/host.mjs",
   "src/screens/works.mjs",
   "src/screens/works.css",
   "dev/index.html",
   "dev/dev.mjs",
   "tests/content.test.mjs",
+  "tests/host-contract.test.mjs",
   "docs/content-model.md",
+  "docs/host-contract.md",
   "docs/agent-contract.md",
   "docs/repository-layout.md",
 ];
@@ -56,15 +59,27 @@ for (const relative of ["design/mockup/index.html", "dev/index.html"]) {
   }
 }
 
-for (const relative of ["src/content/reader.mjs", "src/content/fixtures.mjs", "src/screens/works.mjs", "dev/dev.mjs"]) {
+for (const relative of [
+  "src/content/reader.mjs",
+  "src/content/fixtures.mjs",
+  "src/contract/host.mjs",
+  "src/screens/works.mjs",
+  "dev/dev.mjs",
+]) {
   const source = readFileSync(join(root, relative), "utf8");
   if (/\bfetch\s*\(|XMLHttpRequest/.test(source)) fail(`${relative} makes a network call`);
+}
+
+for (const relative of ["src/screens/works.mjs", "dev/dev.mjs"]) {
+  const source = readFileSync(join(root, relative), "utf8");
+  if (/contract\/host/.test(source)) fail(`${relative} imports the fixture host`);
 }
 
 for (const relative of [
   "design/mockup/canvas.js",
   "src/content/fixtures.mjs",
   "src/content/reader.mjs",
+  "src/contract/host.mjs",
   "src/screens/works.mjs",
   "dev/dev.mjs",
 ]) {

@@ -2,9 +2,11 @@
 
 Status: design input for WRK-1. WRK-2 implements only a fixture-backed read
 subset in `src/content/`: summaries, list/search/kind filter, get, defensive
-copies and computed review/export state. Writes, review/approval, export
-execution, the full query grammar and host integration remain proposed. Names are
-illustrative until a verified Cadence host contract exists.
+copies and computed review/export state. WRK-3 adds the transport-agnostic host
+contract v0 and its test-only conformance fixture (`docs/host-contract.md`,
+`src/contract/host.mjs`). A real host implementation, write UI, the full query
+grammar and agent/CLI tools remain follow-ups. Names are illustrative until a
+verified Cadence host contract exists.
 
 ## Kinds
 
