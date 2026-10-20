@@ -115,7 +115,7 @@ const run = async () => {
     return request("GET", `/api/works/${encodeURIComponent(id)}`);
   }
 
-  if (command === "audit") return request("GET", "/api/works/audit");
+  if (command === "audit") return request("GET", "/api/audit");
 
   if (command === "create") {
     if (!values.kind || !values.title || !values.content) {

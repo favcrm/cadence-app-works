@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +38,45 @@ const call = async (base, method, path, body) => {
   const payload = await response.json().catch(() => null);
   return { status: response.status, payload };
 };
+
+const callChunked = (base, path, body, splitAt) =>
+  new Promise((resolve, reject) => {
+    const target = new URL(path, base);
+    const request = httpRequest(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname,
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": body.length,
+        },
+      },
+      (response) => {
+        let raw = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          raw += chunk;
+        });
+        response.on("end", () => {
+          let payload = null;
+          try {
+            payload = JSON.parse(raw);
+          } catch {
+            payload = null;
+          }
+          resolve({ status: response.statusCode, payload });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.write(body.subarray(0, splitAt));
+    setTimeout(() => {
+      request.write(body.subarray(splitAt));
+      request.end();
+    }, 10);
+  });
 
 test("reference host serves the contract and persists across restart", async () => {
   const directory = await mkdtemp(join(tmpdir(), "works-host-"));
@@ -140,7 +180,7 @@ test("reference host serves the contract and persists across restart", async () 
     assert.equal(restored.status, 200);
     assert.equal(restored.payload.id, id);
 
-    const audit = await call(first.url, "GET", "/api/works/audit");
+    const audit = await call(first.url, "GET", "/api/audit");
     assert.ok(audit.payload.some((event) => event.action === "review_approve"));
     assert.ok(audit.payload.some((event) => event.action === "export"));
 
@@ -176,6 +216,110 @@ test("works CLI reads the reference host", async () => {
     const show = await runCli(["show", "q3-planning"], env);
     assert.equal(show.status, 0, show.stderr);
     assert.equal(JSON.parse(show.stdout).title, "Q3 planning");
+
+    const audit = await runCli(["audit"], env);
+    assert.equal(audit.status, 0, audit.stderr);
+    assert.ok(Array.isArray(JSON.parse(audit.stdout)));
+  } finally {
+    if (host) await host.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("concurrent mutations all persist across restart", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "works-concurrent-"));
+  const dataFile = join(directory, "works.json");
+  let host;
+  let restarted;
+
+  try {
+    host = await createReferenceHost({ dataFile, port: 0 });
+    const creates = await Promise.all(
+      Array.from({ length: 16 }, (_, index) =>
+        call(host.url, "POST", "/api/works", {
+          kind: "doc",
+          title: `Concurrent ${index}`,
+          content: { blocks: [{ type: "p", text: `Body ${index}` }] },
+          tags: [],
+          actor: "author-1",
+          idempotencyKey: `concurrent-${index}`,
+        }),
+      ),
+    );
+    assert.deepEqual(creates.map(({ status }) => status), Array(16).fill(201));
+    const ids = creates.map(({ payload }) => payload.id);
+    await host.close();
+    host = null;
+
+    restarted = await createReferenceHost({ dataFile, port: 0 });
+    for (const id of ids) {
+      const found = await call(restarted.url, "GET", `/api/works/${id}`);
+      assert.equal(found.status, 200, id);
+    }
+  } finally {
+    if (host) await host.close();
+    if (restarted) await restarted.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("multibyte JSON split across chunks is preserved", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "works-unicode-"));
+  const dataFile = join(directory, "works.json");
+  let host;
+
+  try {
+    host = await createReferenceHost({ dataFile, port: 0 });
+    const body = Buffer.from(
+      JSON.stringify({
+        kind: "doc",
+        title: "Café 漢",
+        content: { blocks: [{ type: "p", text: "保留评论记录" }] },
+        tags: [],
+        actor: "author-1",
+        idempotencyKey: "unicode-1",
+      }),
+    );
+    const marker = Buffer.from("漢");
+    const markerAt = body.indexOf(marker);
+    assert.ok(markerAt > 0);
+
+    const response = await callChunked(host.url, "/api/works", body, markerAt + 1);
+    assert.equal(response.status, 201);
+    assert.equal(response.payload.title, "Café 漢");
+    assert.equal(response.payload.blocks[0].text, "保留评论记录");
+  } finally {
+    if (host) await host.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("content id audit is not shadowed by the audit route", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "works-audit-"));
+  const dataFile = join(directory, "works.json");
+  let host;
+
+  try {
+    host = await createReferenceHost({ dataFile, port: 0 });
+    const created = await call(host.url, "POST", "/api/works", {
+      kind: "doc",
+      title: "Audit",
+      content: { blocks: [{ type: "p", text: "Audit content" }] },
+      tags: [],
+      actor: "author-1",
+      idempotencyKey: "audit-content",
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.payload.id, "audit");
+
+    const content = await call(host.url, "GET", "/api/works/audit");
+    assert.equal(content.status, 200);
+    assert.equal(content.payload.id, "audit");
+
+    const audit = await call(host.url, "GET", "/api/audit");
+    assert.equal(audit.status, 200);
+    assert.ok(Array.isArray(audit.payload));
+    assert.ok(audit.payload.some((event) => event.action === "create"));
   } finally {
     if (host) await host.close();
     await rm(directory, { recursive: true, force: true });

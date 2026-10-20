@@ -25,8 +25,11 @@ const send = (res, status, body) => {
 };
 
 const readJsonBody = async (req) => {
-  let raw = "";
-  for await (const chunk of req) raw += chunk;
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks).toString("utf8");
   if (raw.trim() === "") return {};
   try {
     return JSON.parse(raw);
@@ -56,12 +59,22 @@ export async function createReferenceHost({
     }
   }
 
-  const persist = async () => {
-    if (!dataFile) return;
-    await mkdir(dirname(dataFile), { recursive: true });
-    const temporary = `${dataFile}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(host.snapshot(), null, 2)}\n`);
-    await rename(temporary, dataFile);
+  let persistQueue = Promise.resolve();
+  let persistSequence = 0;
+
+  const persist = () => {
+    if (!dataFile) return Promise.resolve();
+    const run = persistQueue.then(async () => {
+      await mkdir(dirname(dataFile), { recursive: true });
+      const temporary = `${dataFile}.${process.pid}.${persistSequence++}.tmp`;
+      await writeFile(temporary, `${JSON.stringify(host.snapshot(), null, 2)}\n`);
+      await rename(temporary, dataFile);
+    });
+    persistQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   };
 
   const mutate = async (work) => {
@@ -83,6 +96,11 @@ export async function createReferenceHost({
 
       if (url.pathname === "/health" && method === "GET") {
         send(res, 200, { ok: true, host: "reference" });
+        return;
+      }
+
+      if (url.pathname === "/api/audit" && method === "GET") {
+        send(res, 200, host.audit());
         return;
       }
 
@@ -124,11 +142,6 @@ export async function createReferenceHost({
           return;
         }
         send(res, 405, { error: "method_not_allowed" });
-        return;
-      }
-
-      if (parts.length === 3 && parts[2] === "audit" && method === "GET") {
-        send(res, 200, host.audit());
         return;
       }
 
@@ -251,16 +264,15 @@ export async function createReferenceHost({
   const url = `http://${bind}:${actualPort}`;
   let closed = false;
 
-  const close = () =>
-    new Promise((resolveClose, rejectClose) => {
-      if (closed) {
-        resolveClose();
-        return;
-      }
-      closed = true;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    await new Promise((resolveClose, rejectClose) => {
       server.close((error) => (error ? rejectClose(error) : resolveClose()));
       server.closeAllConnections?.();
     });
+    await persistQueue;
+  };
 
   return { server, host, url, port: actualPort, dataFile, close };
 }
