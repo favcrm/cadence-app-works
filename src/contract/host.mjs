@@ -363,6 +363,33 @@ export function createFixtureHost({ fixtures = contentFixtures, clock = nowIso }
     return { id, revision, format, digest };
   };
 
+  const snapshot = () => ({
+    items: [...items.values()].map(clone),
+    events: events.map(clone),
+    idempotency: [...idempotency.entries()].map(([key, entry]) => [
+      key,
+      { fingerprint: entry.fingerprint, result: clone(entry.result) },
+    ]),
+  });
+
+  const loadState = (state) => {
+    if (!state || !Array.isArray(state.items)) throw new HostError("invalid", "invalid state");
+    const next = new Map();
+    for (const item of state.items) {
+      validateItem(item);
+      next.set(item.id, clone(item));
+    }
+    items.clear();
+    for (const [id, item] of next) items.set(id, item);
+    events.length = 0;
+    for (const event of state.events ?? []) events.push(clone(event));
+    idempotency.clear();
+    for (const [key, entry] of state.idempotency ?? []) {
+      if (!entry || typeof entry.fingerprint !== "string") continue;
+      idempotency.set(key, { fingerprint: entry.fingerprint, result: clone(entry.result) });
+    }
+  };
+
   return Object.freeze({
     query,
     get,
@@ -374,5 +401,7 @@ export function createFixtureHost({ fixtures = contentFixtures, clock = nowIso }
     review,
     export: exportContent,
     audit: () => events.map(clone),
+    snapshot,
+    loadState,
   });
 }
