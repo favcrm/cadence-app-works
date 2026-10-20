@@ -23,11 +23,16 @@ const required = [
   "src/content/reader.mjs",
   "src/contract/host.mjs",
   "src/host/server.mjs",
+  "src/host/client.mjs",
   "scripts/works.mjs",
   "src/screens/works.mjs",
+  "src/screens/works-write.mjs",
   "src/screens/works.css",
   "dev/index.html",
   "dev/dev.mjs",
+  "dev/write.html",
+  "dev/write.mjs",
+  "dev/write.css",
   "tests/content.test.mjs",
   "tests/host-contract.test.mjs",
   "tests/host-service.test.mjs",
@@ -50,7 +55,7 @@ if (!/^app:\s*works\s*$/m.test(fields)) fail("app/app.md app is not works");
 if (!/^title:\s*Works\s*$/m.test(fields)) fail("app/app.md title is not Works");
 if (!/^version:\s*'0\.1\.0'\s*$/m.test(fields)) fail("app/app.md version is not 0.1.0");
 
-for (const relative of ["design/mockup/index.html", "dev/index.html"]) {
+for (const relative of ["design/mockup/index.html", "dev/index.html", "dev/write.html"]) {
   const html = readFileSync(join(root, relative), "utf8");
   for (const asset of ["tokens.css", "kit.css", "canvas.css", "canvas.js"]) {
     if (relative.startsWith("design/") && !html.includes(asset)) {
@@ -75,7 +80,9 @@ for (const relative of [
 
 for (const relative of ["src/screens/works.mjs", "dev/dev.mjs"]) {
   const source = readFileSync(join(root, relative), "utf8");
-  if (/contract\/host/.test(source)) fail(`${relative} imports the fixture host`);
+  if (/contract\/host|host\/client|host\/server/.test(source)) {
+    fail(`${relative} imports a host`);
+  }
 }
 
 for (const relative of [
@@ -84,9 +91,12 @@ for (const relative of [
   "src/content/reader.mjs",
   "src/contract/host.mjs",
   "src/host/server.mjs",
+  "src/host/client.mjs",
   "scripts/works.mjs",
   "src/screens/works.mjs",
+  "src/screens/works-write.mjs",
   "dev/dev.mjs",
+  "dev/write.mjs",
 ]) {
   const syntax = spawnSync(process.execPath, ["--check", join(root, relative)], {
     stdio: "inherit",
