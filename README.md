@@ -6,12 +6,11 @@ repository name does not change installation or data identities.
 
 ## Status
 
-v0.3 host content contract v0 (WRK-3). This is **not** an installable app and
-has no host integration. The merged read-only surface still shows Documents →
-deck/doc/sheet detail → review/export status, with no actions. WRK-3 adds a
-transport-agnostic host contract and an in-memory conformance fixture for
-create/patch, review, export, soft delete, revisions and audit. The fixture is
-test-only and is not wired into the app.
+v0.4 reference host + CLI (WRK-4). This is **not** an installable app and has no
+Cadence host integration. The read-only surface is unchanged. The v0 content
+contract now runs behind a localhost reference host with JSON persistence and a
+CLI; the service is development tooling, not the production Cadence host. No app
+write/review/export controls and no agent tool-call command are added.
 
 ## What is here
 
@@ -19,70 +18,88 @@ test-only and is not wired into the app.
 |---|---|
 | `design/mockup/` | Static reference for the reviewed Documents → New → Deck/Doc/Sheet → Review → Export flow |
 | `src/content/` | Read-only content fixtures and reader: list/search/filter/get, review/export state |
-| `src/contract/` | Test-only in-memory host: create/patch, review, export, soft delete, CAS, idempotency and audit |
+| `src/contract/` | Reference in-memory host: create/patch, review, export, soft delete, CAS, idempotency and audit |
+| `src/host/` | Localhost reference host service over the contract; JSON state |
 | `src/screens/` | Dependency-free read-only Documents and detail surface |
+| `scripts/works.mjs` | CLI for the reference host |
 | `dev/` | Development harness over the fixture reader; dev-only tokens/kit |
-| `tests/` | Node tests for the reader and the host contract conformance |
+| `tests/` | Reader, contract, reference-host and CLI tests |
 | `app/app.md` | Manifest placeholder; no workflows, screens or capabilities claimed |
 | `docs/host-contract.md` | Transport-agnostic host content contract v0 |
 | `docs/content-model.md` | Proposed docs/sheets/decks model, revisions, review/export gate and query |
 | `docs/agent-contract.md` | Proposed master/chat/CLI capability matrix; tool-call command deferred |
-| `docs/repository-layout.md` | Host/app boundaries and planned layout |
-| `scripts/check-scaffold.mjs` | Static scaffold, source-syntax and no-network-call check |
 
-The mockup and dev harness are design/development evidence only. They are not
-shipped app source; the app screen will use the host-injected UI kit.
+The mockup, dev harness and reference host are development evidence only. The
+app screen stays read-only; the reference host is not imported by it.
 
-## Run
-
-From the repository root:
+## Run the read-only surface
 
 ```sh
 python3 -m http.server 4173
+# http://127.0.0.1:4173/dev/
+# http://127.0.0.1:4173/design/mockup/
 ```
 
-- Read-only surface: `http://127.0.0.1:4173/dev/`
-- Design reference: `http://127.0.0.1:4173/design/mockup/`
+Direct states: `/dev/?id=q3-planning`, `/dev/?id=q3-notes`,
+`/dev/?id=q3-budget`, `&theme=light`.
 
-Read-only direct states:
+## Run the reference host
 
-```text
-/dev/                         Documents
-/dev/?id=q3-planning          Deck detail
-/dev/?id=q3-notes             Doc detail
-/dev/?id=q3-budget            Sheet detail
-/dev/?id=q3-planning&theme=light
+```sh
+node src/host/server.mjs
+# http://127.0.0.1:4174
+# state: .data/works.json (ignored; delete it to reseed fixtures)
 ```
 
-The development page loads IBM Plex from Google Fonts. It makes no Cadence host
-calls.
+The host binds to localhost, has no auth and is not production. The CLI uses
+`WORKS_HOST` (default `http://127.0.0.1:4174`):
+
+```sh
+node scripts/works.mjs list --kind deck
+node scripts/works.mjs show q3-planning
+node scripts/works.mjs create --kind doc --title "Retention addendum" \
+  --content ./content.json --actor author-1 --key create-1
+node scripts/works.mjs patch retention-addendum --if-revision 1 \
+  --operations ./operations.json --actor author-1 --key patch-1
+node scripts/works.mjs request-review retention-addendum --revision 2 --actor author-1
+node scripts/works.mjs review retention-addendum --revision 2 \
+  --decision approve --actor reviewer-1
+node scripts/works.mjs export retention-addendum --revision 2 \
+  --format pdf --actor reviewer-1
+```
+
+`--content` is the kind payload (`blocks`, `slides` or `columns`/`rows`);
+`--operations` is a JSON array such as
+`[{"type":"set_title","title":"Retention addendum v2"}]`. Writes require
+`--actor` and `--key` (idempotency); patch/trash/restore require
+`--if-revision`. The CLI prints JSON and exits non-zero on a host error.
 
 ## Check
 
 ```sh
 node scripts/check-scaffold.mjs
-node --test tests/*.test.mjs
+node --test --test-force-exit tests/*.test.mjs
 ```
 
-CI runs both. The scaffold check also verifies source syntax and rejects
-`fetch`/`XMLHttpRequest` in the read path.
+CI runs both. The force exit is for undici's keep-alive sockets; the test servers
+are closed before exit. The scaffold check also verifies source syntax and keeps
+the read-only app free of host imports.
 
-## Read-only boundary
+## Boundaries
 
-- The reader returns summaries and defensive copies; no create/edit/delete,
-  review, approval or export action is exposed in the app.
-- Export is only a computed state: edited/draft content is blocked; a reviewed
-  current revision is ready.
-- `src/contract/host.mjs` is a test-only conformance fixture. It is not imported
-  by `src/screens/` or `dev/` and is not a host or a production content service.
-- No host integration, persistence, auth, permissions, agent tools or CLI.
-- No real data, credentials, provider calls, installs or releases.
+- The reference host is local development tooling: no auth, no real data, no
+  production persistence and no Cadence host integration.
+- The app screen has no create/edit/delete/review/export controls and does not
+  import the host.
+- The CLI is a content client for the reference host, not the master/chat/CLI
+  agent tool-call command.
+- No host changes, credentials, provider calls, installs or releases.
 
 ## Next
 
-1. Implement the v0 contract in the Cadence host.
+1. Implement the v0 contract in the Cadence production host.
 2. Add write/review/export UI behind that verified host contract.
-3. Add agent/CLI tools only after the host tool-call command is frozen.
+3. Add agent/CLI tool calls only after the host tool-call command is frozen.
 
-WRK-1 covers the scaffold. WRK-2 covers the read-only surface. WRK-3 covers the
-host contract and fixture conformance.
+WRK-1 scaffold, WRK-2 read-only surface, WRK-3 contract/fixture, WRK-4 reference
+host/CLI.

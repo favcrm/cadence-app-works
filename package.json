@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "python3 -m http.server 4173",
     "dev:mockup": "python3 -m http.server 4173 --directory design/mockup",
-    "test": "node --test tests/*.test.mjs",
-    "check": "node scripts/check-scaffold.mjs && node --test tests/*.test.mjs"
+    "host": "node src/host/server.mjs",
+    "works": "node scripts/works.mjs",
+    "test": "node --test --test-force-exit tests/*.test.mjs",
+    "check": "node scripts/check-scaffold.mjs && node --test --test-force-exit tests/*.test.mjs"
   }
 }

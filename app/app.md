@@ -16,8 +16,8 @@ Deck / Doc / Sheet → Review → Export, with a static reference in
 Status: **not installable**. This bundle declares no workflows, screens, actions,
 capabilities or provider connections. It is a manifest placeholder so the app
 identity and host/app boundary are explicit before the host contract is frozen.
-The repository's `dev/` read-only fixture surface is development evidence, not an
-installed screen.
+The repository's `dev/` read-only fixture, reference host and content CLI are
+development tools, not installed screens or bundle capabilities.
 
 Content reads/writes, typed revisions, review and export enforcement, agent tool
 execution and the CLI are host-owned. The app does not approve its own content:

@@ -3,8 +3,10 @@
 Status: design input for WRK-1. **Not a wire contract.** The host tool-call
 command, its names and its schema are still being refined. This repository does
 not implement agent tools, orchestration or a CLI. WRK-2 adds only a read-only,
-fixture-backed app surface; WRK-3 adds the content contract and a test-only
-fixture. Neither is an agent tool-call command or a host integration.
+fixture-backed app surface; WRK-3 adds the content contract and reference host;
+WRK-4 adds a localhost reference service and a content CLI. The CLI is a client
+of that reference host, not this tool-call command, and none of these is Cadence
+host integration.
 
 ## One service, three clients
 

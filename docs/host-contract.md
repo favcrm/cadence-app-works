@@ -4,7 +4,8 @@ Status: **proposed, transport-agnostic**. This is the app-facing contract the
 Cadence host must implement for Works. It is not a host integration claim and it
 does not define the master/chat/CLI tool-call command.
 
-The conformance fixture lives in `src/contract/host.mjs` and is test-only.
+The reference implementation lives in `src/contract/host.mjs`; the localhost
+service and CLI are in `src/host/` and `scripts/works.mjs`.
 
 ## Actors and scopes
 
@@ -123,15 +124,19 @@ The host records at least `{ at, actor, on_behalf_of?, action, id, revision }` f
 every mutation and export. The fixture exposes `audit()` for tests. Agent-authored
 content keeps the actor and on-behalf-of identity for the review surface.
 
-## Fixture and boundaries
+## Reference host and boundaries
 
-`src/contract/host.mjs` is an in-memory conformance fixture:
+`src/contract/host.mjs` is the in-memory reference host. `src/host/server.mjs`
+exposes the same operations on localhost (default `127.0.0.1:4174`), seeds the
+content fixtures, and persists snapshots to ignored `.data/works.json`.
+`scripts/works.mjs` is a JSON CLI over that service.
 
-- no network, persistence, real auth or real content;
+This reference host is development tooling:
+
+- no auth, real data, production persistence or Cadence host integration;
 - not imported by `src/screens/` or `dev/`;
 - no create/edit/delete/review/export controls are added to the read-only app;
-- the master/chat/CLI tool-call command, host transport and write UI remain
-  deferred.
+- the master/chat/CLI agent tool-call command and write UI remain deferred.
 
-The fixture proves the contract's revision, review, export, delete and audit
-semantics. It is not a production content service.
+It proves the contract end to end for the CLI and gives the next host/UI/agent
+slices one surface to call. It is not the production Cadence host.

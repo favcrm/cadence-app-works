@@ -17,5 +17,5 @@ jobs:
           node-version: "22"
       - name: Check scaffold and sources
         run: node scripts/check-scaffold.mjs
-      - name: Test read-only content
-        run: node --test tests/*.test.mjs
+      - name: Test content, contract, reference host and CLI
+        run: node --test --test-force-exit tests/*.test.mjs
