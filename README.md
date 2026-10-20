@@ -6,10 +6,12 @@ repository name does not change installation or data identities.
 
 ## Status
 
-v0.2 read-only content surface (WRK-2). This is **not** an installable app and
-has no host integration. It adds a fixture-backed read surface: Documents →
-deck/doc/sheet detail → review/export status, with no writes or actions. The
-fixture adapter is development evidence, not a production content service.
+v0.3 host content contract v0 (WRK-3). This is **not** an installable app and
+has no host integration. The merged read-only surface still shows Documents →
+deck/doc/sheet detail → review/export status, with no actions. WRK-3 adds a
+transport-agnostic host contract and an in-memory conformance fixture for
+create/patch, review, export, soft delete, revisions and audit. The fixture is
+test-only and is not wired into the app.
 
 ## What is here
 
@@ -17,10 +19,12 @@ fixture adapter is development evidence, not a production content service.
 |---|---|
 | `design/mockup/` | Static reference for the reviewed Documents → New → Deck/Doc/Sheet → Review → Export flow |
 | `src/content/` | Read-only content fixtures and reader: list/search/filter/get, review/export state |
+| `src/contract/` | Test-only in-memory host: create/patch, review, export, soft delete, CAS, idempotency and audit |
 | `src/screens/` | Dependency-free read-only Documents and detail surface |
 | `dev/` | Development harness over the fixture reader; dev-only tokens/kit |
-| `tests/` | Node tests for the reader, review/export gate and defensive copies |
+| `tests/` | Node tests for the reader and the host contract conformance |
 | `app/app.md` | Manifest placeholder; no workflows, screens or capabilities claimed |
+| `docs/host-contract.md` | Transport-agnostic host content contract v0 |
 | `docs/content-model.md` | Proposed docs/sheets/decks model, revisions, review/export gate and query |
 | `docs/agent-contract.md` | Proposed master/chat/CLI capability matrix; tool-call command deferred |
 | `docs/repository-layout.md` | Host/app boundaries and planned layout |
@@ -66,16 +70,19 @@ CI runs both. The scaffold check also verifies source syntax and rejects
 ## Read-only boundary
 
 - The reader returns summaries and defensive copies; no create/edit/delete,
-  review, approval or export action is exposed.
+  review, approval or export action is exposed in the app.
 - Export is only a computed state: edited/draft content is blocked; a reviewed
   current revision is ready.
+- `src/contract/host.mjs` is a test-only conformance fixture. It is not imported
+  by `src/screens/` or `dev/` and is not a host or a production content service.
 - No host integration, persistence, auth, permissions, agent tools or CLI.
 - No real data, credentials, provider calls, installs or releases.
 
 ## Next
 
-1. Freeze the host content contract for read/write, revisions, review and export.
-2. Add write actions and the review/export UI behind that contract.
+1. Implement the v0 contract in the Cadence host.
+2. Add write/review/export UI behind that verified host contract.
 3. Add agent/CLI tools only after the host tool-call command is frozen.
 
-WRK-1 covers the scaffold. WRK-2 covers this read-only surface.
+WRK-1 covers the scaffold. WRK-2 covers the read-only surface. WRK-3 covers the
+host contract and fixture conformance.

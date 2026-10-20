@@ -1,7 +1,7 @@
 # Repository layout
 
-Status: WRK-1 scaffold plus the WRK-2 read-only content surface. No host
-integration, writes or release.
+Status: WRK-1 scaffold, WRK-2 read-only content surface and WRK-3 host content
+contract v0 with a test-only fixture. No host integration, app writes or release.
 
 ```text
 cadence-app-works/
@@ -17,12 +17,16 @@ cadence-app-works/
     content/
       fixtures.mjs         # 10 docs/sheets/decks; dev evidence
       reader.mjs           # read-only list/search/filter/get; review/export state
+    contract/
+      host.mjs             # test-only in-memory host contract fixture
     screens/
       works.mjs            # dependency-free read surface
       works.css            # layout classes over the host token/kit contract
   tests/
     content.test.mjs       # reader, gate and defensive-copy tests
+    host-contract.test.mjs # host contract conformance
   docs/
+    host-contract.md       # transport-agnostic content contract v0
     content-model.md       # proposed content/revision/review/export/query model
     agent-contract.md      # proposed master/chat/CLI contract; tool calls deferred
     repository-layout.md
@@ -59,6 +63,15 @@ returns the full content plus computed `reviewState`, `exportState` and
 `src/screens/works.mjs` mounts a Documents list and read-only deck/doc/sheet
 detail. It renders review and export state as information; it exposes no action.
 
+## Host contract fixture
+
+`src/contract/host.mjs` is an in-memory reference implementation of
+`docs/host-contract.md` used only by `tests/host-contract.test.mjs`. It covers
+create/patch, review request/decision, export, soft delete/restore, revision CAS,
+idempotency, query and audit. It is not a host, opens no network, is not imported
+by `src/screens/` or `dev/`, and does not add app write controls. The host
+transport, persistence and real authorization are follow-ups.
+
 ## Checks
 
 ```sh
@@ -77,5 +90,6 @@ Work on a task branch. Check for existing work before opening a duplicate PR.
 Report exact revisions, real check exit codes and unimplemented interfaces.
 Independent review and pinned host-contract evidence precede releases.
 
-WRK-1 covers the scaffold; WRK-2 covers this read-only surface. The host contract,
-write actions, review/export UI and agent/CLI tool-call command are follow-ups.
+WRK-1 covers the scaffold; WRK-2 covers the read-only surface; WRK-3 covers the
+host contract v0 and its fixture. Host implementation, write/review/export UI and
+the agent/CLI tool-call command are follow-ups.

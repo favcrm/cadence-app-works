@@ -11,6 +11,12 @@ evidence only: no writes, host integration, review/export actions, agent tools o
 CLI. Do not turn the read-only surface into a write surface without a verified
 host contract, and do not add a second agent/CLI surface here.
 
+WRK-3 adds `docs/host-contract.md` and `src/contract/host.mjs`, a test-only
+in-memory conformance fixture for create/patch, review, export, soft delete,
+revisions, CAS and audit. It is not a host, is not imported by `src/screens/` or
+`dev/`, and adds no app write controls. Do not wire it into the UI or present the
+fixture as host integration.
+
 ## Boundaries
 
 - The Cadence host owns the generic shell, navigation, chat, authorization,
