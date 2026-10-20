@@ -2,7 +2,8 @@
 
 Status: design input for WRK-1. **Not a wire contract.** The host tool-call
 command, its names and its schema are still being refined. This repository does
-not implement agent tools, orchestration or a CLI.
+not implement agent tools, orchestration or a CLI. WRK-2 adds only a read-only,
+fixture-backed app surface; it is not the agent content API.
 
 ## One service, three clients
 

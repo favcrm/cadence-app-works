@@ -6,68 +6,76 @@ repository name does not change installation or data identities.
 
 ## Status
 
-v0.1 design-first scaffold (WRK-1). This is **not** an installable app. It has no
-runtime content, review/export backend, agent tools or CLI. The reviewed UX is a
-static reference; application source follows behind a verified Cadence host
-contract.
+v0.2 read-only content surface (WRK-2). This is **not** an installable app and
+has no host integration. It adds a fixture-backed read surface: Documents →
+deck/doc/sheet detail → review/export status, with no writes or actions. The
+fixture adapter is development evidence, not a production content service.
 
 ## What is here
 
 | Path | Purpose |
 |---|---|
 | `design/mockup/` | Static reference for the reviewed Documents → New → Deck/Doc/Sheet → Review → Export flow |
+| `src/content/` | Read-only content fixtures and reader: list/search/filter/get, review/export state |
+| `src/screens/` | Dependency-free read-only Documents and detail surface |
+| `dev/` | Development harness over the fixture reader; dev-only tokens/kit |
+| `tests/` | Node tests for the reader, review/export gate and defensive copies |
 | `app/app.md` | Manifest placeholder; no workflows, screens or capabilities claimed |
 | `docs/content-model.md` | Proposed docs/sheets/decks model, revisions, review/export gate and query |
-| `docs/agent-contract.md` | Proposed master/chat/CLI capability matrix, use cases and guardrails; tool calls deferred |
+| `docs/agent-contract.md` | Proposed master/chat/CLI capability matrix; tool-call command deferred |
 | `docs/repository-layout.md` | Host/app boundaries and planned layout |
-| `scripts/check-scaffold.mjs` | Static scaffold check used by CI |
+| `scripts/check-scaffold.mjs` | Static scaffold, source-syntax and no-network-call check |
 
-The mockup is design evidence only. It is not shipped app source and the app
-screen will use the host-injected UI kit, not the mockup's local CSS.
+The mockup and dev harness are design/development evidence only. They are not
+shipped app source; the app screen will use the host-injected UI kit.
 
-## Run the design reference
+## Run
+
+From the repository root:
 
 ```sh
-python3 -m http.server 4173 --directory design/mockup
-# http://127.0.0.1:4173/?flow=documents&theme=dark
+python3 -m http.server 4173
 ```
 
-The top flow bar is a mockup control, not product navigation. Direct states:
+- Read-only surface: `http://127.0.0.1:4173/dev/`
+- Design reference: `http://127.0.0.1:4173/design/mockup/`
+
+Read-only direct states:
 
 ```text
-?flow=documents|new|deck|doc|sheet|review|export
-&flow=export&approved=1    ready export
-&flow=review&approved=1    approved review
-&flow=deck&apply=1         chat apply; review invalidated
-&flow=new&create=1         create a draft
-&theme=light               light theme
+/dev/                         Documents
+/dev/?id=q3-planning          Deck detail
+/dev/?id=q3-notes             Doc detail
+/dev/?id=q3-budget            Sheet detail
+/dev/?id=q3-planning&theme=light
 ```
+
+The development page loads IBM Plex from Google Fonts. It makes no Cadence host
+calls.
 
 ## Check
 
 ```sh
-node --check design/mockup/canvas.js
 node scripts/check-scaffold.mjs
+node --test tests/*.test.mjs
 ```
 
-CI runs the same checks. No install step is required.
+CI runs both. The scaffold check also verifies source syntax and rejects
+`fetch`/`XMLHttpRequest` in the read path.
 
-## Boundaries
+## Read-only boundary
 
-- The Cadence host owns the shell, navigation, chat, authorization, scoped
-  storage, credential custody, approvals, review/export enforcement, agent tool
-  execution and the CLI.
-- Works owns content-domain definitions and screens only behind a verified host
-  contract.
-- The master/chat/CLI tool-call command is still being refined. This repository
-  does not define or implement a second tool surface.
-- No real data, credentials, provider calls, production installs or release.
+- The reader returns summaries and defensive copies; no create/edit/delete,
+  review, approval or export action is exposed.
+- Export is only a computed state: edited/draft content is blocked; a reviewed
+  current revision is ready.
+- No host integration, persistence, auth, permissions, agent tools or CLI.
+- No real data, credentials, provider calls, installs or releases.
 
 ## Next
 
-1. Freeze the host contract for content read/write, revisions, review and export.
-2. Add the basic app screen behind that contract.
+1. Freeze the host content contract for read/write, revisions, review and export.
+2. Add write actions and the review/export UI behind that contract.
 3. Add agent/CLI tools only after the host tool-call command is frozen.
 
-WRK-1 covers this scaffold. Follow-up tickets cover the host contract and the
-first runtime surface.
+WRK-1 covers the scaffold. WRK-2 covers this read-only surface.

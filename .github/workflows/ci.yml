@@ -15,5 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Check scaffold
+      - name: Check scaffold and sources
         run: node scripts/check-scaffold.mjs
+      - name: Test read-only content
+        run: node --test tests/*.test.mjs

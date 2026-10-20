@@ -5,7 +5,9 @@
   "type": "module",
   "packageManager": "pnpm@12.2.1",
   "scripts": {
-    "dev": "python3 -m http.server 4173 --directory design/mockup",
-    "check": "node --check design/mockup/canvas.js && node scripts/check-scaffold.mjs"
+    "dev": "python3 -m http.server 4173",
+    "dev:mockup": "python3 -m http.server 4173 --directory design/mockup",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check-scaffold.mjs && node --test tests/*.test.mjs"
   }
 }
