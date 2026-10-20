@@ -12,10 +12,11 @@ const CHANGE_TONE = {
   removed: "var(--color-fail)",
 };
 
-export function mountWorks(root, { content }) {
+export function mountWorks(root, { content, actions = null }) {
   if (!root || !content) throw new Error("mountWorks requires a root and a content reader");
 
   const doc = root.ownerDocument;
+  const writable = Boolean(actions);
   const state = { kind: "all", query: "", selectedId: null };
 
   const h = (tag, attrs = {}, ...children) => {
@@ -27,6 +28,8 @@ export function mountWorks(root, { content }) {
       else if (key === "style") node.setAttribute("style", value);
       else if (key.startsWith("on") && typeof value === "function") {
         node.addEventListener(key.slice(2).toLowerCase(), value);
+      } else if (typeof value === "boolean") {
+        if (value) node.setAttribute(key, "");
       } else {
         node.setAttribute(key, value);
       }
@@ -45,6 +48,17 @@ export function mountWorks(root, { content }) {
     return `Reviewed r${item.reviewedRevision}`;
   };
 
+  const headerActions = () =>
+    writable
+      ? h(
+          "div",
+          { class: "works-head-actions" },
+          badge("dev write", "var(--color-accent)"),
+          h("button", { type: "button", class: "btn btn-acc btn-sm", onclick: () => actions.create() }, "New"),
+          h("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: () => actions.restore() }, "Restore"),
+        )
+      : badge("read-only", "var(--color-accent)");
+
   const header = () =>
     h(
       "header",
@@ -54,9 +68,13 @@ export function mountWorks(root, { content }) {
         {},
         h("div", { class: "kicker" }, "works · content"),
         h("h1", { class: "works-title" }, "Documents"),
-        h("p", { class: "muted works-sub" }, "Read-only content surface · fixture data"),
+        h(
+          "p",
+          { class: "muted works-sub" },
+          writable ? "Dev write surface · local reference host" : "Read-only content surface · fixture data",
+        ),
       ),
-      h("div", { class: "works-head-actions" }, badge("read-only", "var(--color-accent)")),
+      headerActions(),
     );
 
   const counts = () => {
@@ -256,7 +274,11 @@ export function mountWorks(root, { content }) {
         "div",
         { class: "works-sheet-top" },
         h("span", { class: "works-sheet-tab on" }, "Sheet"),
-        h("span", { class: "works-sheet-note" }, `${item.rows.length} rows · read-only`),
+        h(
+          "span",
+          { class: "works-sheet-note" },
+          `${item.rows.length} rows · ${writable ? "dev write" : "read-only"}`,
+        ),
       ),
       h(
         "div",
@@ -296,6 +318,30 @@ export function mountWorks(root, { content }) {
     return sheetView(item);
   };
 
+  const detailActions = (item) => {
+    if (!writable) return badge("read-only", "var(--color-accent)");
+    return h(
+      "div",
+      { class: "works-head-actions works-detail-actions" },
+      h("button", { type: "button", class: "btn btn-sm", onclick: () => actions.edit(item) }, "Edit"),
+      item.reviewStatus === "pending"
+        ? h("button", { type: "button", class: "btn btn-acc btn-sm", onclick: () => actions.review(item) }, "Review")
+        : h("button", { type: "button", class: "btn btn-sm", onclick: () => actions.requestReview(item) }, "Request review"),
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn btn-sm",
+          disabled: item.exportState !== "ready",
+          title: item.exportReason,
+          onclick: () => actions.export(item),
+        },
+        "Export",
+      ),
+      h("button", { type: "button", class: "btn btn-danger btn-sm", onclick: () => actions.trash(item) }, "Trash"),
+    );
+  };
+
   const detailView = (item) => {
     const back = h(
       "button",
@@ -325,7 +371,7 @@ export function mountWorks(root, { content }) {
           `Owner ${item.owner} · updated ${item.updated} · ${reviewText(item)}`,
         ),
       ),
-      h("div", { class: "works-head-actions" }, badge("read-only", "var(--color-accent)")),
+      detailActions(item),
     );
 
     return h(
@@ -370,5 +416,5 @@ export function mountWorks(root, { content }) {
   }
 
   render();
-  return { select };
+  return { select, refresh: render };
 }

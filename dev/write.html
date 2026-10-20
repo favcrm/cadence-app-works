@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Works · dev write</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../design/mockup/tokens.css" />
+    <link rel="stylesheet" href="../design/mockup/kit.css" />
+    <link rel="stylesheet" href="../src/screens/works.css" />
+    <link rel="stylesheet" href="./write.css" />
+  </head>
+  <body class="works-dev works-write-dev">
+    <div class="works-write-bar">
+      <div class="works-write-bar-copy">
+        <span class="kicker">works · dev write</span>
+        <span id="host-status" class="works-write-status" role="status" aria-live="polite">connecting</span>
+      </div>
+      <label class="works-write-actor" for="write-actor">
+        Actor
+        <input id="write-actor" class="field" value="author-1" autocomplete="off" />
+      </label>
+    </div>
+    <div id="write-feedback" class="works-write-feedback" role="status" aria-live="polite"></div>
+    <div id="works-root"></div>
+    <script type="module" src="./write.mjs"></script>
+  </body>
+</html>
