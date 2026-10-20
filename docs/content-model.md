@@ -1,6 +1,9 @@
 # Content model (proposed)
 
-Status: design input for WRK-1. Nothing here is implemented. Names are
+Status: design input for WRK-1. WRK-2 implements only a fixture-backed read
+subset in `src/content/`: summaries, list/search/kind filter, get, defensive
+copies and computed review/export state. Writes, review/approval, export
+execution, the full query grammar and host integration remain proposed. Names are
 illustrative until a verified Cadence host contract exists.
 
 ## Kinds

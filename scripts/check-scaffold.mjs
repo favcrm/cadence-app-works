@@ -19,6 +19,13 @@ const required = [
   "design/mockup/canvas.js",
   "design/mockup/tokens.css",
   "design/mockup/kit.css",
+  "src/content/fixtures.mjs",
+  "src/content/reader.mjs",
+  "src/screens/works.mjs",
+  "src/screens/works.css",
+  "dev/index.html",
+  "dev/dev.mjs",
+  "tests/content.test.mjs",
   "docs/content-model.md",
   "docs/agent-contract.md",
   "docs/repository-layout.md",
@@ -37,18 +44,34 @@ if (!/^app:\s*works\s*$/m.test(fields)) fail("app/app.md app is not works");
 if (!/^title:\s*Works\s*$/m.test(fields)) fail("app/app.md title is not Works");
 if (!/^version:\s*'0\.1\.0'\s*$/m.test(fields)) fail("app/app.md version is not 0.1.0");
 
-const html = readFileSync(join(root, "design/mockup/index.html"), "utf8");
-for (const asset of ["tokens.css", "kit.css", "canvas.css", "canvas.js"]) {
-  if (!html.includes(asset)) fail(`design/mockup/index.html does not reference ${asset}`);
+for (const relative of ["design/mockup/index.html", "dev/index.html"]) {
+  const html = readFileSync(join(root, relative), "utf8");
+  for (const asset of ["tokens.css", "kit.css", "canvas.css", "canvas.js"]) {
+    if (relative.startsWith("design/") && !html.includes(asset)) {
+      fail(`${relative} does not reference ${asset}`);
+    }
+  }
+  for (const forbidden of ["preview.simplebuild.site", "/var/www/preview"]) {
+    if (html.includes(forbidden)) fail(`${relative} contains ${forbidden}`);
+  }
 }
 
-for (const forbidden of ["preview.simplebuild.site", "/var/www/preview"]) {
-  if (html.includes(forbidden)) fail(`design/mockup/index.html contains ${forbidden}`);
+for (const relative of ["src/content/reader.mjs", "src/content/fixtures.mjs", "src/screens/works.mjs", "dev/dev.mjs"]) {
+  const source = readFileSync(join(root, relative), "utf8");
+  if (/\bfetch\s*\(|XMLHttpRequest/.test(source)) fail(`${relative} makes a network call`);
 }
 
-const syntax = spawnSync(process.execPath, ["--check", join(root, "design/mockup/canvas.js")], {
-  stdio: "inherit",
-});
-if (syntax.status !== 0) fail("design/mockup/canvas.js failed node --check");
+for (const relative of [
+  "design/mockup/canvas.js",
+  "src/content/fixtures.mjs",
+  "src/content/reader.mjs",
+  "src/screens/works.mjs",
+  "dev/dev.mjs",
+]) {
+  const syntax = spawnSync(process.execPath, ["--check", join(root, relative)], {
+    stdio: "inherit",
+  });
+  if (syntax.status !== 0) fail(`${relative} failed node --check`);
+}
 
 console.log("scaffold ok");

@@ -1,10 +1,15 @@
 # Cadence Works App development
 
-This is the independent `works` app scaffold (WRK-1), not a release. Read
-`README.md`, `docs/repository-layout.md`, `docs/content-model.md` and
-`docs/agent-contract.md` before modifying it. Preserve the installed app
-identity `works`; the repository name does not change installation or data
-identities.
+This is the independent `works` app (WRK-1 scaffold, WRK-2 read-only surface),
+not a release. Read `README.md`, `docs/repository-layout.md`,
+`docs/content-model.md` and `docs/agent-contract.md` before modifying it.
+Preserve the installed app identity `works`; the repository name does not change
+installation or data identities.
+
+WRK-2 adds a fixture-backed read-only screen and reader. It is development
+evidence only: no writes, host integration, review/export actions, agent tools or
+CLI. Do not turn the read-only surface into a write surface without a verified
+host contract, and do not add a second agent/CLI surface here.
 
 ## Boundaries
 
