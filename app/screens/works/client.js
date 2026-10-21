@@ -10,13 +10,16 @@
   var RECORDS = "screen-records.v1";
   var KINDS = ["doc", "deck", "sheet"];
   var KIND_LABEL = { doc: "Doc", deck: "Deck", sheet: "Sheet" };
+  var DOC_BLOCK_TYPES = ["p", "h2", "callout"];
+  // Review presentation comes only from host results: reviewState, reviewStatus,
+  // reviewedRevision, revision and exportState/exportReason.
   var REVIEW_LABEL = { draft: "Draft", edited: "Edited since review", reviewed: "Reviewed" };
   // The host's closed Works refusal vocabulary (store codes carried through the bridge).
   var REFUSAL_TEXT = {
     invalid: "The host refused this request as invalid.",
     forbidden: "Your verified role cannot perform this action.",
     not_found: "This Works item was not found.",
-    conflict: "This item changed since you opened it. Reload and try again.",
+    conflict: "This item changed since you opened it. Your unsaved input is kept below.",
     needs_review: "Export needs an approved current revision.",
     facts_changed: "That changed. Refresh before trying again.",
     rejected: "The host refused this request.",
@@ -39,7 +42,9 @@
     item: null,
     trashed: null,
     notice: null,
-    busy: false
+    busy: false,
+    // Unsaved draft kept across a CAS refusal so the user does not lose input.
+    draft: null
   };
 
   function readBoot() {
@@ -77,6 +82,12 @@
   function refusalText(refusal) {
     if (!refusal) return "The host refused this request.";
     return REFUSAL_TEXT[refusal.code] || refusal.text || "The host refused this request.";
+  }
+
+  // One idempotency key per user intent. A retry of the same intent reuses the
+  // key; a new intent rotates it. The host replays the same key and payload.
+  function newKey(verb) {
+    return verb + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
   }
 
   function send(message) {
@@ -141,6 +152,7 @@
     render();
   }
 
+  // A refusal keeps the unsaved draft in state.draft, so the user can reconcile it.
   function fail(refusal) {
     state.busy = false;
     state.notice = { kind: "refused", text: refusalText(refusal) };
@@ -173,40 +185,110 @@
       state.view = "detail";
       state.busy = false;
       state.notice = null;
+      state.draft = null;
       render();
     }, fail);
   }
 
-  function createDocument(form) {
-    var title = form.title.value.trim();
-    if (!title) {
-      state.notice = { kind: "refused", text: "Give the document a name." };
+  // Typed content, per kind. Each form edits only the fields it shows; other
+  // fields of the stored content are carried over verbatim.
+  function contentFromDraft(kind, draft) {
+    if (kind === "doc") {
+      return { blocks: draft.blocks.map(function (block) {
+        var out = { type: block.type, text: block.text };
+        if (block.type === "callout" && block.label) out.label = block.label;
+        return out;
+      }) };
+    }
+    if (kind === "deck") {
+      return { slides: draft.slides.map(function (slide) {
+        var out = { title: slide.title, body: slide.body };
+        if (slide.notes) out.notes = slide.notes;
+        return out;
+      }) };
+    }
+    return { columns: draft.columns.slice(), rows: draft.rows.map(function (row) { return row.slice(); }) };
+  }
+
+  function validateDraft(kind, draft) {
+    if (!draft.title.trim()) return "Give the document a name.";
+    if (kind === "doc") {
+      for (var i = 0; i < draft.blocks.length; i++) {
+        if (!draft.blocks[i].text.trim()) return "Every block needs text.";
+      }
+    }
+    if (kind === "deck") {
+      for (var j = 0; j < draft.slides.length; j++) {
+        if (!draft.slides[j].title.trim() || !draft.slides[j].body.trim()) {
+          return "Every slide needs a title and a body.";
+        }
+      }
+    }
+    if (kind === "sheet") {
+      if (!draft.columns.length || draft.columns.some(function (c) { return !c.trim(); })) {
+        return "Every column needs a name.";
+      }
+      for (var k = 0; k < draft.rows.length; k++) {
+        if (draft.rows[k].length !== draft.columns.length) return "Every row must match the columns.";
+      }
+    }
+    return null;
+  }
+
+  // Build a draft from the stored host content, so unedited fields survive.
+  function draftFromItem(item) {
+    var content = item.content || {};
+    var base = { title: item.title };
+    if (item.kind === "doc") base.blocks = (content.blocks || []).map(function (b) {
+      return { type: b.type, text: b.text, label: b.label };
+    });
+    else if (item.kind === "deck") base.slides = (content.slides || []).map(function (s) {
+      return { title: s.title, body: s.body, notes: s.notes };
+    });
+    else {
+      base.columns = (content.columns || []).slice();
+      base.rows = (content.rows || []).map(function (r) { return r.slice(); });
+    }
+    return base;
+  }
+
+  function createDocument(kind, draft) {
+    var problem = validateDraft(kind, draft);
+    if (problem) {
+      state.notice = { kind: "refused", text: problem };
       render();
       return;
     }
-    var kind = form.kind.value;
-    var body = form.content.value.trim();
+    var key = newKey("create");
     setBusy(true);
-    call("works.create", { kind: kind, title: title, content: contentFor(kind, body) })
-      .then(function (created) {
-        receipt("Created " + title + ".");
-        return loadItem(created && created.id);
-      }, fail);
+    call("works.create", {
+      kind: kind,
+      title: draft.title.trim(),
+      content: contentFromDraft(kind, draft),
+      idempotency_key: key
+    }).then(function (created) {
+      receipt("Created " + draft.title.trim() + ".");
+      state.draft = null;
+      return loadItem(created && created.id);
+    }, fail);
   }
 
-  // Shape a plain body into the kind's verified content grammar.
-  // Doc = blocks, deck = slides, sheet = columns and rows.
-  function contentFor(kind, body) {
-    if (kind === "doc") return { blocks: body ? [{ type: "p", text: body }] : [] };
-    if (kind === "deck") return { slides: body ? [{ title: body.split("\n")[0], body: body }] : [] };
-    return { columns: ["Item"], rows: [] };
-  }
-
-  // Patch uses the verified grammar: set_title only.
-  function patchDocument(item, form) {
-    var title = form.title.value.trim();
-    if (!title) {
-      state.notice = { kind: "refused", text: "Give the document a name." };
+  // patch: title and typed content, both at if_revision, with one key per save.
+  function saveItem(item, draft) {
+    var problem = validateDraft(item.kind, draft);
+    if (problem) {
+      state.notice = { kind: "refused", text: problem };
+      render();
+      return;
+    }
+    var operations = [];
+    if (draft.title.trim() !== item.title) operations.push({ type: "set_title", title: draft.title.trim() });
+    var nextContent = contentFromDraft(item.kind, draft);
+    if (JSON.stringify(nextContent) !== JSON.stringify(item.content)) {
+      operations.push({ type: "set_content", content: nextContent });
+    }
+    if (!operations.length) {
+      state.notice = { kind: "receipt", text: "Nothing to save." };
       render();
       return;
     }
@@ -214,43 +296,55 @@
     call("works.patch", {
       id: item.id,
       if_revision: item.revision,
-      operations: [{ type: "set_title", title: title }]
+      operations: operations,
+      idempotency_key: newKey("patch")
     }).then(function () {
       receipt("Saved.");
+      state.draft = null;
       return loadItem(item.id);
     }, fail);
   }
 
   function requestReview(item) {
     setBusy(true);
-    call("works.request_review", { id: item.id, revision: item.revision })
-      .then(function () {
-        receipt("Review requested for revision " + item.revision + ".");
-        return loadItem(item.id);
-      }, fail);
+    call("works.request_review", {
+      id: item.id,
+      revision: item.revision,
+      idempotency_key: newKey("request_review")
+    }).then(function () {
+      receipt("Review requested for revision " + item.revision + ".");
+      return loadItem(item.id);
+    }, fail);
   }
 
   // Trash is soft. The item leaves the list; its id is kept so Restore stays reachable.
   function trashItem(item) {
     setBusy(true);
-    call("works.trash", { id: item.id, if_revision: item.revision })
-      .then(function () {
-        state.trashed = { id: item.id, title: item.title, revision: item.revision };
-        state.view = "list";
-        receipt("Moved " + item.title + " to trash.");
-        return loadList();
-      }, fail);
+    call("works.trash", {
+      id: item.id,
+      if_revision: item.revision,
+      idempotency_key: newKey("trash")
+    }).then(function (reply) {
+      var revision = reply && typeof reply.revision === "number" ? reply.revision : item.revision;
+      state.trashed = { id: item.id, title: item.title, revision: revision };
+      state.view = "list";
+      receipt("Moved " + item.title + " to trash.");
+      return loadList();
+    }, fail);
   }
 
   // Restore needs the trashed revision the host last reported.
   function restoreItem(trashed) {
     setBusy(true);
-    call("works.restore", { id: trashed.id, if_revision: trashed.revision })
-      .then(function () {
-        state.trashed = null;
-        receipt("Restored " + trashed.title + ".");
-        return loadList();
-      }, fail);
+    call("works.restore", {
+      id: trashed.id,
+      if_revision: trashed.revision,
+      idempotency_key: newKey("restore")
+    }).then(function () {
+      state.trashed = null;
+      receipt("Restored " + trashed.title + ".");
+      return loadList();
+    }, fail);
   }
 
   // Review is a SLOT: the host draws the approve/changes card and supplies the decision.
@@ -279,6 +373,20 @@
       }, fail);
   }
 
+  // Presentation from host results only. Stale approval = a reviewed revision
+  // that is no longer current, so the host reports the state as edited.
+  function reviewPresentation(item) {
+    if (item.reviewStatus === "pending") return "Review pending for revision " + item.revision + ".";
+    if (item.reviewStatus === "changes_requested") return "Changes requested. Edit and request review again.";
+    if (item.reviewState === "reviewed" && item.exportState === "ready") {
+      return "Reviewed: revision " + item.revision + " is approved and current.";
+    }
+    if (item.reviewState === "edited" && item.reviewedRevision) {
+      return "Stale approval: revision " + item.reviewedRevision + " was approved; current is " + item.revision + ".";
+    }
+    return REVIEW_LABEL[item.reviewState] || "Draft";
+  }
+
   function noticeNode() {
     if (!state.notice) return null;
     return el("div", { class: "works-notice " + state.notice.kind, role: "status", text: state.notice.text });
@@ -297,28 +405,50 @@
     ]);
   }
 
-  function newDocumentForm() {
-    var kindSelect = el("select", { name: "kind" }, KINDS.map(function (kind) {
-      return el("option", { value: kind, text: KIND_LABEL[kind] });
-    }));
-    var title = el("input", { name: "title", placeholder: "Name", required: true });
-    var content = el("textarea", { name: "content", placeholder: "Body (doc or deck first slide)" });
-    var form = el("form", { class: "works-form", on: {
-      submit: function (event) {
-        event.preventDefault();
-        createDocument(form);
-      }
-    } }, [
-      el("h2", { text: "New document" }),
-      el("label", null, [el("span", { text: "Kind" }), kindSelect]),
-      el("label", null, [el("span", { text: "Name" }), title]),
-      el("label", null, [el("span", { text: "Content" }), content]),
-      el("button", { type: "submit", disabled: state.busy, text: "Create" })
-    ]);
-    form.kind = kindSelect;
-    form.title = title;
-    form.content = content;
-    return form;
+  // Draft-backed editor for doc blocks, deck slides and sheet rows. Input edits
+  // mutate the draft object so a CAS refusal re-renders the unsaved text.
+  function kindEditor(kind, draft, onChange) {
+    if (kind === "doc") {
+      return el("div", { class: "works-blocks" }, draft.blocks.map(function (block, index) {
+        var typeSelect = el("select", { "aria-label": "Block type", on: { change: function (e) { block.type = e.target.value; onChange(); } } },
+          DOC_BLOCK_TYPES.map(function (t) {
+            var o = el("option", { value: t, text: t });
+            if (t === block.type) o.setAttribute("selected", "");
+            return o;
+          }));
+        var text = el("textarea", { "aria-label": "Block text", on: { input: function (e) { block.text = e.target.value; } } });
+        text.value = block.text;
+        return el("div", { class: "works-block" }, [typeSelect, text,
+          el("button", { type: "button", text: "Remove", on: { click: function () { draft.blocks.splice(index, 1); onChange(); } } })]);
+      }).concat([el("button", { type: "button", text: "Add block", on: { click: function () { draft.blocks.push({ type: "p", text: "" }); onChange(); } } })]));
+    }
+    if (kind === "deck") {
+      return el("div", { class: "works-slides" }, draft.slides.map(function (slide, index) {
+        var title = el("input", { "aria-label": "Slide title", on: { input: function (e) { slide.title = e.target.value; } } });
+        title.value = slide.title;
+        var body = el("textarea", { "aria-label": "Slide body", on: { input: function (e) { slide.body = e.target.value; } } });
+        body.value = slide.body;
+        return el("div", { class: "works-slide" }, [title, body,
+          el("button", { type: "button", text: "Remove", on: { click: function () { draft.slides.splice(index, 1); onChange(); } } })]);
+      }).concat([el("button", { type: "button", text: "Add slide", on: { click: function () { draft.slides.push({ title: "", body: "" }); onChange(); } } })]));
+    }
+    // sheet: columns and rows as a text grid; cells are strings or numbers.
+    var header = el("input", { "aria-label": "Columns (comma separated)", on: { input: function (e) {
+      draft.columns = e.target.value.split(",").map(function (c) { return c.trim(); });
+    } } });
+    header.value = draft.columns.join(", ");
+    return el("div", { class: "works-sheet" }, [header,
+      el("p", { text: "Columns and rows keep their shape. Rows must match the column count." }),
+      el("button", { type: "button", text: "Add row", on: { click: function () {
+        draft.rows.push(draft.columns.map(function () { return ""; })); onChange();
+      } } })
+    ].concat(draft.rows.map(function (row, r) {
+      return el("div", { class: "works-row-cells" }, row.map(function (cell, c) {
+        var input = el("input", { "aria-label": "Cell " + (r + 1) + "-" + (c + 1), on: { input: function (e) { row[c] = e.target.value; } } });
+        input.value = String(cell);
+        return input;
+      }).concat([el("button", { type: "button", text: "Remove row", on: { click: function () { draft.rows.splice(r, 1); onChange(); } } })]));
+    })));
   }
 
   function listView() {
@@ -360,35 +490,61 @@
       rows.length
         ? el("div", null, rows)
         : el("p", { class: "works-empty", text: state.busy ? "Loading…" : "No documents match this view." }),
-      newDocumentForm()
+      newDocumentView()
+    ]);
+  }
+
+  function newDocumentView() {
+    var draft = state.draft && state.draft.create ? state.draft.create : { kind: "doc", title: "", blocks: [{ type: "p", text: "" }], slides: [], columns: [], rows: [] };
+    state.draft = { create: draft };
+    var kindSelect = el("select", { name: "kind", "aria-label": "Kind", on: { change: function (e) {
+      draft.kind = e.target.value;
+      if (draft.kind === "sheet" && !draft.columns.length) draft.columns = ["Item"];
+      if (draft.kind === "deck" && !draft.slides.length) draft.slides = [{ title: "", body: "" }];
+      render();
+    } } }, KINDS.map(function (kind) {
+      var o = el("option", { value: kind, text: KIND_LABEL[kind] });
+      if (kind === draft.kind) o.setAttribute("selected", "");
+      return o;
+    }));
+    var title = el("input", { name: "title", placeholder: "Name", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; } } });
+    title.value = draft.title;
+    var editor = kindEditor(draft.kind, draft, render);
+    return el("div", { class: "works-form" }, [
+      el("h2", { text: "New document" }),
+      el("label", null, [el("span", { text: "Kind" }), kindSelect]),
+      el("label", null, [el("span", { text: "Name" }), title]),
+      editor,
+      el("button", { type: "button", disabled: state.busy, text: "Create", on: { click: function () { createDocument(draft.kind, draft); } } })
     ]);
   }
 
   function detailView(item) {
-    var editForm = el("form", { class: "works-form", on: {
-      submit: function (event) {
-        event.preventDefault();
-        patchDocument(item, editForm);
-      }
-    } }, [
-      el("label", null, [el("span", { text: "Name" }), el("input", { name: "title", value: item.title })]),
-      el("button", { type: "submit", disabled: state.busy, text: "Save title" })
-    ]);
-    editForm.title = editForm.querySelector("input[name=title]");
+    var draft = state.draft && state.draft.item === item.id ? state.draft.edit : draftFromItem(item);
+    state.draft = { item: item.id, edit: draft };
+    var title = el("input", { name: "title", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; } } });
+    title.value = draft.title;
+    var editor = kindEditor(item.kind, draft, render);
     var exportable = item.exportState === "ready";
     var actions = el("div", { class: "works-actions" }, [
+      el("button", { type: "button", disabled: state.busy, text: "Save", on: { click: function () { saveItem(item, draft); } } }),
       el("button", { type: "button", disabled: state.busy, text: "Request review", on: { click: function () { requestReview(item); } } }),
       el("button", { type: "button", disabled: state.busy || item.reviewStatus !== "pending", text: "Review", on: { click: function () { reviewItem(item); } } }),
       el("button", { type: "button", disabled: state.busy || !exportable, text: "Export", on: { click: function () { exportItem(item); } } }),
-      el("button", { type: "button", disabled: state.busy, text: "Trash", on: { click: function () { trashItem(item); } } })
+      el("button", { type: "button", disabled: state.busy, text: "Trash", on: { click: function () { trashItem(item); } } }),
+      el("button", { type: "button", disabled: state.busy, text: "Refresh", on: { click: function () { loadItem(item.id); } } })
     ]);
     return el("main", { class: "works-app" }, [
-      el("button", { type: "button", disabled: state.busy, text: "← Documents", on: { click: function () { state.view = "list"; loadList(); } } }),
+      el("button", { type: "button", disabled: state.busy, text: "← Documents", on: { click: function () { state.view = "list"; state.draft = null; loadList(); } } }),
       el("h1", { text: item.title }),
-      el("p", { text: (KIND_LABEL[item.kind] || item.kind) + " · r" + item.revision + " · " + (REVIEW_LABEL[item.reviewState] || item.reviewState) }),
+      el("p", { text: (KIND_LABEL[item.kind] || item.kind) + " · r" + item.revision }),
+      el("p", { text: reviewPresentation(item) }),
       el("p", { text: item.exportReason || (exportable ? "Export ready." : "Export blocked.") }),
       noticeNode(),
-      editForm,
+      el("div", { class: "works-form" }, [
+        el("label", null, [el("span", { text: "Name" }), title]),
+        editor
+      ]),
       actions
     ]);
   }

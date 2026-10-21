@@ -11,14 +11,14 @@
     {
       "name": "client.js",
       "media_type": "text/javascript",
-      "sha256": "sha256:4ed3b0f5e085a779c09a8308d5a9a228f017bb21127e0611780c5294cfe14960",
-      "size": 14433
+      "sha256": "sha256:88ab86f46b91114211c4a7bbe400dd382cd574e783a811345cfcc54a8d2ef522",
+      "size": 22613
     },
     {
       "name": "app.css",
       "media_type": "text/css",
-      "sha256": "sha256:6a07c4c92f715f0b48207aa90bbfb1a3bcb54f2473f35a8a6d9a62b1c66ee91a",
-      "size": 1139
+      "sha256": "sha256:dbd630c42f215e2c7f704a1d09bfd50e1e1d5f6e84eadcde806abf07215be11f",
+      "size": 1419
     }
   ],
   "provenance": {

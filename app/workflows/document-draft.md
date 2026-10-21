@@ -36,6 +36,7 @@ owners or decisions that the brief does not state.
 ## Review draft text: {{title}}
 agent: {{reviewer}}
 size: S
+depends_on: 1
 action: local.text.review
 
 Review the draft above against the brief. Approve only if every fact in the

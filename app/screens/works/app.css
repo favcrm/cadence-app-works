@@ -69,3 +69,6 @@ body {
   border: 1px dashed #d2d2d7;
   border-radius: 6px;
 }
+.works-blocks, .works-slides, .works-sheet { display: grid; gap: 8px; }
+.works-block, .works-slide { display: grid; gap: 6px; padding: 8px; border: 1px solid #d2d2d7; border-radius: 6px; }
+.works-row-cells { display: grid; grid-auto-flow: column; gap: 6px; align-items: center; }
