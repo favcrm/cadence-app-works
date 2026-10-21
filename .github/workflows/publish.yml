@@ -1,0 +1,37 @@
+name: publish
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install the cadence CLI
+        env:
+          GH_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}
+        run: |
+          tag=$(gh release view --repo favcrm/cadence --json tagName -q .tagName)
+          version=${tag#v}
+          gh release download "$tag" --repo favcrm/cadence \
+            --pattern "cadence-v${version}-x86_64-linux.tar.gz" --output /tmp/cadence.tgz
+          mkdir -p /tmp/cadence-bin
+          tar -xzf /tmp/cadence.tgz -C /tmp/cadence-bin
+          bin=$(dirname "$(find /tmp/cadence-bin -name cadence -type f | head -1)")
+          chmod +x "$bin/cadence"
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Validate the bundle
+        run: cadence app check app > /tmp/app-check.json
+      - name: Publish the release to the marketplace
+        env:
+          MARKETPLACE_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}
+        run: node .github/scripts/publish.mjs
