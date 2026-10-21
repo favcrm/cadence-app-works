@@ -10,6 +10,18 @@
   var RECORDS = "screen-records.v1";
   var KINDS = ["doc", "deck", "sheet"];
   var KIND_LABEL = { doc: "Doc", deck: "Deck", sheet: "Sheet" };
+  // Content equality is key-order independent: unchanged saves must not create revisions.
+  function same(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    var ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    for (var i = 0; i < ka.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(b, ka[i]) || !same(a[ka[i]], b[ka[i]])) return false;
+    }
+    return true;
+  }
   var DOC_BLOCK_TYPES = ["p", "h2", "callout"];
   // Review presentation comes only from host results: reviewState, reviewStatus,
   // reviewedRevision, revision and exportState/exportReason.
@@ -185,7 +197,8 @@
       state.view = "detail";
       state.busy = false;
       state.notice = null;
-      state.draft = null;
+      var keepDraft = state.draft && (state.draft.create || (state.draft.item === id && state.draft.dirty));
+      if (!keepDraft) state.draft = null;
       render();
     }, fail);
   }
@@ -301,7 +314,7 @@
     var operations = [];
     if (draft.title.trim() !== item.title) operations.push({ type: "set_title", title: draft.title.trim() });
     var nextContent = contentFromDraft(item.kind, draft);
-    if (JSON.stringify(nextContent) !== JSON.stringify(contentOf(item))) {
+    if (!same(nextContent, contentOf(item))) {
       operations.push({ type: "set_content", content: nextContent });
     }
     if (!operations.length) {
@@ -478,7 +491,7 @@
         el("span", { text: row.title }),
         el("span", { text: KIND_LABEL[row.kind] || row.kind }),
         el("span", { text: "r" + row.revision }),
-        el("span", { text: REVIEW_LABEL[row.reviewState] || row.reviewState }),
+        el("span", { text: row.reviewStatus === "pending" ? "Review pending" : row.reviewStatus === "changes_requested" ? "Changes requested" : (REVIEW_LABEL[row.reviewState] || row.reviewState) }),
         el("span", { text: row.updated })
       ]);
     });
@@ -538,9 +551,10 @@
   function detailView(item) {
     var draft = state.draft && state.draft.item === item.id ? state.draft.edit : draftFromItem(item);
     state.draft = { item: item.id, edit: draft };
-    var title = el("input", { name: "title", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; } } });
+    var markDirty = function () { state.draft.dirty = true; render(); };
+    var title = el("input", { name: "title", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; markDirty(); } } });
     title.value = draft.title;
-    var editor = kindEditor(item.kind, draft, render);
+    var editor = kindEditor(item.kind, draft, markDirty);
     var exportable = item.exportState === "ready";
     var actions = el("div", { class: "works-actions" }, [
       el("button", { type: "button", disabled: state.busy, text: "Save", on: { click: function () { saveItem(item, draft); } } }),
