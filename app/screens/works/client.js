@@ -334,16 +334,18 @@
       if_revision: base.revision,
       operations: operations,
       idempotency_key: newKey("patch")
-    }).then(function () {
+    }).then(function (reply) {
       receipt("Saved.");
       var typedDuring = state.draft && ((state.draft.version || 0) !== sentVersion);
-      if (!typedDuring) state.draft = null;
-      return loadItem(item.id).then(function (fresh) {
-        if (typedDuring && fresh && state.draft && state.draft.item === item.id) {
-          state.draft.base = fresh;
-          state.draft.dirty = true;
-        }
-      });
+      if (typedDuring && reply && state.draft && state.draft.item === item.id) {
+        state.item = reply;
+        state.draft.base = reply;
+        state.draft.dirty = true;
+        render();
+        return;
+      }
+      state.draft = null;
+      return loadItem(item.id);
     }, fail);
   }
 
