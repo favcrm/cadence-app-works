@@ -26,11 +26,15 @@ The host, not the app, decides who may author, review, approve or export.
 ## Installable bundle
 
 ```sh
-cadence app check app                # offline package validation; exit 0 on pass
-cadence app install <path-or-url>    # gated until `cadence app approve`
+cadence app check app                                  # offline package validation; exit 0 on pass
+cadence app catalog install-check <bundle>             # prints the digest, name, version, file list
+cadence app catalog install <bundle> --expected-digest <digest>
+cadence app catalog approve <install-id> --digest <digest>
+cadence app context create <options>                   # optional content defaults; see --help
 ```
 
-Install and approve are host operations. This repository does not run them.
+Install, approval and context are host operations gated by the operator's
+verified session. This repository does not run them.
 
 ## Dev-only reference tools
 

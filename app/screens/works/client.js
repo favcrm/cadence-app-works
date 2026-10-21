@@ -236,18 +236,27 @@
   }
 
   // Build a draft from the stored host content, so unedited fields survive.
+  // The host returns content keys (blocks, slides, columns, rows) at the top
+  // level of the detail, not under a nested content object.
+  function contentOf(item) {
+    var out = {};
+    if (item.kind === "doc") out.blocks = item.blocks || [];
+    else if (item.kind === "deck") out.slides = item.slides || [];
+    else { out.columns = item.columns || []; out.rows = item.rows || []; }
+    return out;
+  }
+
   function draftFromItem(item) {
-    var content = item.content || {};
     var base = { title: item.title };
-    if (item.kind === "doc") base.blocks = (content.blocks || []).map(function (b) {
+    if (item.kind === "doc") base.blocks = (item.blocks || []).map(function (b) {
       return { type: b.type, text: b.text, label: b.label };
     });
-    else if (item.kind === "deck") base.slides = (content.slides || []).map(function (s) {
+    else if (item.kind === "deck") base.slides = (item.slides || []).map(function (s) {
       return { title: s.title, body: s.body, notes: s.notes };
     });
     else {
-      base.columns = (content.columns || []).slice();
-      base.rows = (content.rows || []).map(function (r) { return r.slice(); });
+      base.columns = (item.columns || []).slice();
+      base.rows = (item.rows || []).map(function (r) { return r.slice(); });
     }
     return base;
   }
@@ -259,15 +268,23 @@
       render();
       return;
     }
-    var key = newKey("create");
+    var content = contentFromDraft(kind, draft);
+    var intent = JSON.stringify({ kind: kind, title: draft.title.trim(), content: content });
+    if (state.createIntent !== intent) {
+      state.createIntent = intent;
+      state.createKey = newKey("create");
+    }
+    var key = state.createKey;
     setBusy(true);
     call("works.create", {
       kind: kind,
       title: draft.title.trim(),
-      content: contentFromDraft(kind, draft),
+      content: content,
       idempotency_key: key
     }).then(function (created) {
       receipt("Created " + draft.title.trim() + ".");
+      state.createIntent = null;
+      state.createKey = null;
       state.draft = null;
       return loadItem(created && created.id);
     }, fail);
@@ -284,7 +301,7 @@
     var operations = [];
     if (draft.title.trim() !== item.title) operations.push({ type: "set_title", title: draft.title.trim() });
     var nextContent = contentFromDraft(item.kind, draft);
-    if (JSON.stringify(nextContent) !== JSON.stringify(item.content)) {
+    if (JSON.stringify(nextContent) !== JSON.stringify(contentOf(item))) {
       operations.push({ type: "set_content", content: nextContent });
     }
     if (!operations.length) {
@@ -309,8 +326,7 @@
     setBusy(true);
     call("works.request_review", {
       id: item.id,
-      revision: item.revision,
-      idempotency_key: newKey("request_review")
+      revision: item.revision
     }).then(function () {
       receipt("Review requested for revision " + item.revision + ".");
       return loadItem(item.id);
