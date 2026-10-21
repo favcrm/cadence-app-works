@@ -200,6 +200,7 @@
       var keepDraft = state.draft && (state.draft.create || (state.draft.item === id && state.draft.dirty));
       if (!keepDraft) state.draft = null;
       render();
+      return item;
     }, fail);
   }
 
