@@ -288,6 +288,7 @@
       state.createKey = newKey("create");
     }
     var key = state.createKey;
+    var sentVersion = (state.draft && state.draft.version) || 0;
     setBusy(true);
     call("works.create", {
       kind: kind,
@@ -298,7 +299,9 @@
       receipt("Created " + draft.title.trim() + ".");
       state.createIntent = null;
       state.createKey = null;
-      state.draft = null;
+      var typedDuring = state.draft && ((state.draft.version || 0) !== sentVersion);
+      if (!typedDuring) state.draft = null;
+      if (typedDuring) { render(); return; }
       return loadItem(created && created.id);
     }, fail);
   }
@@ -311,10 +314,11 @@
       render();
       return;
     }
+    var base = (state.draft && state.draft.base) || item;
     var operations = [];
-    if (draft.title.trim() !== item.title) operations.push({ type: "set_title", title: draft.title.trim() });
+    if (draft.title.trim() !== base.title) operations.push({ type: "set_title", title: draft.title.trim() });
     var nextContent = contentFromDraft(item.kind, draft);
-    if (!same(nextContent, contentOf(item))) {
+    if (!same(nextContent, contentOf(base))) {
       operations.push({ type: "set_content", content: nextContent });
     }
     if (!operations.length) {
@@ -322,15 +326,16 @@
       render();
       return;
     }
+    var sentVersion = (state.draft && state.draft.version) || 0;
     setBusy(true);
     call("works.patch", {
       id: item.id,
-      if_revision: item.revision,
+      if_revision: base.revision,
       operations: operations,
       idempotency_key: newKey("patch")
     }).then(function () {
       receipt("Saved.");
-      state.draft = null;
+      if (state.draft && ((state.draft.version || 0) === sentVersion)) state.draft = null;
       return loadItem(item.id);
     }, fail);
   }
@@ -470,7 +475,7 @@
     return el("div", { class: "works-sheet" }, [header,
       el("p", { text: "Columns and rows keep their shape. Rows must match the column count." }),
       el("button", { type: "button", text: "Add row", on: { click: function () {
-        draft.rows.push(draft.columns.map(function () { return ""; })); onChange();
+        draft.rows.push(draft.columns.map(function () { return ""; })); redraw();
       } } })
     ].concat(draft.rows.map(function (row, r) {
       return el("div", { class: "works-row-cells" }, row.map(function (cell, c) {
@@ -537,7 +542,7 @@
       if (kind === draft.kind) o.setAttribute("selected", "");
       return o;
     }));
-    var touch = function () { if (state.draft) state.draft.dirty = true; };
+    var touch = function () { if (state.draft) { state.draft.dirty = true; state.draft.version = (state.draft.version || 0) + 1; } };
     var redraw = function () { touch(); render(); };
     var title = el("input", { name: "title", placeholder: "Name", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; touch(); } } });
     title.value = draft.title;
@@ -555,15 +560,16 @@
     var sameItem = state.draft && state.draft.item === item.id;
     var draft = sameItem ? state.draft.edit : draftFromItem(item);
     var wasDirty = sameItem ? !!state.draft.dirty : false;
-    var touch = function () { if (state.draft) state.draft.dirty = true; };
+    var touch = function () { if (state.draft) { state.draft.dirty = true; state.draft.version = (state.draft.version || 0) + 1; } };
     var redraw = function () { touch(); render(); };
-    state.draft = { item: item.id, edit: draft, dirty: wasDirty };
+    state.draft = { item: item.id, edit: draft, dirty: wasDirty, base: sameItem ? state.draft.base : item, version: sameItem ? (state.draft.version || 0) : 0 };
     var title = el("input", { name: "title", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; touch(); } } });
     title.value = draft.title;
     var editor = kindEditor(item.kind, draft, touch, redraw);
     var exportable = item.exportState === "ready";
     var actions = el("div", { class: "works-actions" }, [
       el("button", { type: "button", disabled: state.busy, text: "Save", on: { click: function () { saveItem(item, draft); } } }),
+      el("button", { type: "button", disabled: state.busy, text: "Refresh", on: { click: function () { state.draft = null; loadItem(item.id); } } }),
       el("button", { type: "button", disabled: state.busy, text: "Request review", on: { click: function () { requestReview(item); } } }),
       el("button", { type: "button", disabled: state.busy || item.reviewStatus !== "pending", text: "Review", on: { click: function () { reviewItem(item); } } }),
       el("button", { type: "button", disabled: state.busy || !exportable, text: "Export", on: { click: function () { exportItem(item); } } }),
