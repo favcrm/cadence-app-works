@@ -79,6 +79,30 @@ if (localMarketplace) {
   process.exit(0);
 }
 
+// npm-style trusted publishing: GitHub proves the repository/commit with a
+// short-lived OIDC token; the catalogue needs no PAT and derives the source.
+if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
+  const requestUrl = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+  requestUrl.searchParams.set("audience", "agenticos-catalogue");
+  const tokenResponse = await fetch(requestUrl, {
+    headers: { authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+  });
+  if (!tokenResponse.ok) throw new Error("OIDC token request failed: " + tokenResponse.status);
+  const { value } = await tokenResponse.json();
+  const response = await fetch(
+    process.env.CATALOGUE_PUBLISH_URL ?? "https://api-v2.agenticos.hk/public/apps/publish",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${value}` },
+      body: JSON.stringify({ upload, entry }),
+    },
+  );
+  const result = await response.json();
+  if (!response.ok) throw new Error("publish refused: " + JSON.stringify(result));
+  console.log(JSON.stringify(result));
+  process.exit(0);
+}
+
 if (!token) throw new Error("MARKETPLACE_TOKEN is required (contents + pull-requests on " + MARKETPLACE + ")");
 const dir = mkdtempSync(join(tmpdir(), "marketplace-"));
 const url = `https://x-access-token:${token}@github.com/${MARKETPLACE}.git`;
