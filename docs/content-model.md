@@ -1,3 +1,7 @@
+> Status: the installed bundle stores content through the Cadence host. The
+> actor/on-behalf-of fields below are the host-owned revision model; they are
+> never child-supplied. The reference host is development evidence.
+
 # Content model (proposed)
 
 Status: design input for WRK-1. WRK-2 implements only a fixture-backed read

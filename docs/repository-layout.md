@@ -1,3 +1,6 @@
+> Status: `app/` is the installable bundle; `src/`, `dev/`, `scripts/` and the
+> reference host are development tooling and are not installed.
+
 # Repository layout
 
 Status: WRK-1 scaffold, WRK-2 read-only surface, WRK-3 contract, WRK-4 reference
