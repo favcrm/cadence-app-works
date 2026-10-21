@@ -335,8 +335,14 @@
       idempotency_key: newKey("patch")
     }).then(function () {
       receipt("Saved.");
-      if (state.draft && ((state.draft.version || 0) === sentVersion)) state.draft = null;
-      return loadItem(item.id);
+      var typedDuring = state.draft && ((state.draft.version || 0) !== sentVersion);
+      if (!typedDuring) state.draft = null;
+      return loadItem(item.id).then(function (fresh) {
+        if (typedDuring && fresh && state.draft && state.draft.item === item.id) {
+          state.draft.base = fresh;
+          state.draft.dirty = true;
+        }
+      });
     }, fail);
   }
 
@@ -531,7 +537,8 @@
 
   function newDocumentView() {
     var draft = state.draft && state.draft.create ? state.draft.create : { kind: "doc", title: "", blocks: [{ type: "p", text: "" }], slides: [], columns: [], rows: [] };
-    state.draft = { create: draft };
+    var prior = state.draft || {};
+    state.draft = { create: draft, dirty: !!prior.dirty, version: prior.version || 0 };
     var kindSelect = el("select", { name: "kind", "aria-label": "Kind", on: { change: function (e) {
       draft.kind = e.target.value;
       if (draft.kind === "sheet" && !draft.columns.length) draft.columns = ["Item"];
