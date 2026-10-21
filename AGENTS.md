@@ -1,8 +1,8 @@
 # Cadence Works App development
 
 This is the independent `works` app (WRK-1 scaffold, WRK-2 read-only surface,
-WRK-3 contract, WRK-4 reference host/CLI, WRK-5 dev write surface), not a
-release. Read `README.md`, `docs/repository-layout.md`,
+WRK-3 contract, WRK-4 reference host/CLI, WRK-5 dev write surface, WRK-6
+installable bundle), not a release. Read `README.md`, `docs/repository-layout.md`,
 `docs/content-model.md` and `docs/agent-contract.md` before modifying it.
 Preserve the installed app identity `works`; the repository name does not change
 installation or data identities.
@@ -25,6 +25,13 @@ WRK-5 adds `src/host/client.mjs` and a dev-only write/review/export page
 `dev/write.css`). It calls only the local reference host. It is not the Cadence
 production host, not an installed screen and does not change `app/app.md` or the
 read-only `src/screens/works.mjs` default. Do not present it as host integration.
+
+WRK-6 adds the installable `app/` bundle: a real manifest, one local
+`document-draft` workflow, `screens/works/` (`app-screens/v2`,
+`screen-records.v1`, the nine `works.*` operations) and data-only views. It
+calls the Cadence screen host; the reference host and dev pages remain
+development evidence and are not installed. The installed screen never
+supplies an actor or reviewer identity.
 
 ## Boundaries
 
@@ -49,5 +56,14 @@ read-only `src/screens/works.mjs` default. Do not present it as host integration
   unimplemented interfaces honestly. Independent review and pinned host contract
   evidence precede releases.
 
-The app manifest is a placeholder: it declares no workflows, screens,
-capabilities or provider connections and is not installable.
+The app manifest (`app/app.md`, `0.2.0`) is the installable bundle. It requires
+`app-screens[1]`, `screen-records[1]` and `app-views[1]`, declares no
+connections or capabilities and ships the `document-draft` text workflow and
+the `screens/works/` screen. The shipped screen and views must not contain
+localhost, reference-host, fixture or actor-picker terms; `scripts/check-scaffold.mjs`
+and `cadence app check app` enforce that.
+
+WRK-6 replaces the reference-host client path in `app/screens/works/` with the
+generic screen bootstrap and MessagePort protocol. The reference host, CLI and
+dev write page remain dev-only tools outside shipped assets; do not present
+them as the product path.

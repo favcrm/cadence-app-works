@@ -1,3 +1,7 @@
+> Status: the installed screen uses host-drawn actions and the `works.*` screen
+> door. The CLI and tool-call matrix below remain development/design evidence and
+> are not shipped capabilities.
+
 # Agent and CLI contract (proposed)
 
 Status: design input for WRK-1. **Not a wire contract.** The host tool-call

@@ -1,3 +1,9 @@
+> Status: the installed `app/` bundle uses the Cadence screen host
+> (`works.*` under `screen-records.v1`). This document is the transport-agnostic
+> domain model and the reference host contract. The installed child never
+> supplies `actor`, `on_behalf_of`, install, context or session; the host derives
+> them. The localhost reference host is development evidence, not the shipped path.
+
 # Host content contract v0
 
 Status: **proposed, transport-agnostic**. This is the app-facing contract the

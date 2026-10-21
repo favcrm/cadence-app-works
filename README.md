@@ -6,35 +6,53 @@ repository name does not change installation or data identities.
 
 ## Status
 
-v0.5 dev write/review/export surface over the local reference host (WRK-5). This
-is **not** an installable app and has no Cadence host integration. The read-only
-screen is unchanged. The write page is development tooling: it calls only the
-localhost reference host, has no auth and does not change the app manifest or add
-an installed screen. No agent tool-call command is added.
+WRK-6 makes `app/` an installable bundle (`0.2.0`):
 
-## What is here
+- `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]` and
+  `app-views[1]`. Declares no connections and no capabilities.
+- `app/workflows/document-draft.md`: a local text-draft workflow. It produces
+  draft text for a person to paste into Works. It does not mutate Works and
+  makes no content-approval claim.
+- `app/screens/works/`: the Works screen (`screens.json` with `app-screens/v2`
+  and `screen-records.v1`, `client.js`, `app.css`). It calls only the nine
+  `works.*` host operations declared in `screens.json`. Review and export are
+  host-confirmed slots. The screen has no localhost, reference-host or actor
+  input.
+- `app/views/app-views-v1.json`: data-only list and detail views.
+- `app/assets/works.svg`: listing icon.
+
+The host, not the app, decides who may author, review, approve or export.
+
+## Installable bundle
+
+```sh
+cadence app check app                # offline package validation; exit 0 on pass
+cadence app install <path-or-url>    # gated until `cadence app approve`
+```
+
+Install and approve are host operations. This repository does not run them.
+
+## Dev-only reference tools
+
+The files below are development tooling. They are **not** shipped app assets,
+are not referenced by `app/screens/works/`, and do not claim Cadence host
+integration:
 
 | Path | Purpose |
 |---|---|
-| `design/mockup/` | Static reference for the reviewed Documents → New → Deck/Doc/Sheet → Review → Export flow |
-| `src/content/` | Read-only content fixtures and reader: list/search/filter/get, review/export state |
-| `src/contract/` | Reference in-memory host: create/patch, review, export, soft delete, CAS, idempotency and audit |
-| `src/host/server.mjs` | Localhost reference host service over the contract; JSON state |
+| `design/mockup/` | Static design evidence for the Documents -> New -> Deck/Doc/Sheet -> Review -> Export flow |
+| `src/content/` | Read-only content fixtures and reader |
+| `src/contract/` | Reference in-memory host implementation of `docs/host-contract.md` |
+| `src/host/server.mjs` | Localhost reference host service (JSON state, no auth) |
 | `src/host/client.mjs` | Browser client for the reference host |
-| `src/screens/works.mjs` | Dependency-free read-only Documents and detail surface |
+| `src/screens/works.mjs` | Dev-only read-only surface |
 | `src/screens/works-write.mjs` | Dev-only write/review/export actions over the reference host |
 | `scripts/works.mjs` | CLI for the reference host |
-| `dev/` | Read-only fixture harness plus the dev write page; dev-only tokens/kit |
+| `dev/` | Read-only fixture harness plus the dev write page |
 | `tests/` | Reader, contract, reference-host and CLI tests |
-| `app/app.md` | Manifest placeholder; no workflows, screens or capabilities claimed |
-| `docs/host-contract.md` | Transport-agnostic host content contract v0 |
-| `docs/content-model.md` | Proposed docs/sheets/decks model, revisions, review/export gate and query |
-| `docs/agent-contract.md` | Proposed master/chat/CLI capability matrix; tool-call command deferred |
+| `docs/` | Host content contract v0, content model, agent contract |
 
-The mockup, dev harness, reference host and write page are development evidence
-only. The app screen stays read-only; the write page is not an installed screen.
-
-## Run the read-only surface
+## Run the dev read-only surface
 
 ```sh
 python3 -m http.server 4173
@@ -42,10 +60,7 @@ python3 -m http.server 4173
 # http://127.0.0.1:4173/design/mockup/
 ```
 
-Direct states: `/dev/?id=q3-planning`, `/dev/?id=q3-notes`,
-`/dev/?id=q3-budget`, `&theme=light`.
-
-## Run the reference host
+## Run the reference host (dev only)
 
 ```sh
 node src/host/server.mjs
@@ -76,10 +91,7 @@ node scripts/works.mjs export retention-addendum --revision 2 \
 `--actor` and `--key` (idempotency); patch/trash/restore require
 `--if-revision`. The CLI prints JSON and exits non-zero on a host error.
 
-## Run the dev write surface
-
-Start the reference host and the static server, then open
-`http://127.0.0.1:4173/dev/write.html`:
+## Run the dev write surface (dev only)
 
 ```sh
 node src/host/server.mjs
@@ -88,42 +100,37 @@ python3 -m http.server 4173
 # optional: ?host=http://127.0.0.1:4174&theme=light
 ```
 
-Only loopback hosts are accepted; a non-loopback `host` is refused before any
-request. The page shows the host connection and an explicit actor, creates docs,
-sheets and decks, edits the title with the current revision, requests review,
-records an independent reviewer decision (`changes` or `approve`), exports only
-a reviewed current revision, trashes/restores, and reloads after a stale edit
-conflict. It does not rewrite document bodies, so existing content is never
-flattened by the editor. This is a dev page; the read-only screen and app
-manifest remain write-free.
+Only loopback hosts are accepted. The page takes an explicit actor string, which
+is valid only for this dev reference host and must never appear in the shipped
+screen. It is not an installed screen.
 
 ## Check
 
 ```sh
-node scripts/check-scaffold.mjs
+node scripts/check-scaffold.mjs            # package validation: bundle, manifest, workflow, views, screen digests, dev-tool syntax
 node --test --test-force-exit tests/*.test.mjs
+cadence app check app                      # host validator; exit 0 on pass
 ```
 
-CI runs both. The force exit is for undici's keep-alive sockets; the test servers
-are closed before exit. The scaffold check verifies source syntax and keeps the
-read-only screen and read-only dev harness free of host imports.
+CI runs the first two. `cadence app check app` runs the host's offline
+validator and is the authoritative package check. The force exit is for
+undici's keep-alive sockets; the test servers are closed before exit.
 
 ## Boundaries
 
 - The reference host is local development tooling: no auth, no real data, no
   production persistence and no Cadence host integration.
-- The read-only app screen and app manifest have no create/edit/delete/review/
-  export controls. The dev write page is the only write surface and is not an
-  installed screen.
-- The CLI and write page are content clients for the reference host, not the
-  master/chat/CLI agent tool-call command.
-- No host changes, credentials, provider calls, installs or releases.
+- The shipped screen has no reference host, fixture or actor input. Its
+  create/edit/trash/restore/review/export controls call only host operations.
+- The dev write page is not an installed screen and is not shipped.
+- No host changes, credentials, provider calls, installs or releases from this
+  repository.
 
 ## Next
 
-1. Implement the v0 contract in the Cadence production host.
-2. Move the write/review/export UI behind that verified host contract.
-3. Add agent/CLI tool calls only after the host tool-call command is frozen.
+1. Install and mount the bundle through the standard screen host, and exercise
+   create/read/patch/review/export/trash/restore against the merged host.
+2. Add agent/CLI tool calls only after the host tool-call command is frozen.
 
 WRK-1 scaffold, WRK-2 read-only surface, WRK-3 contract/fixture, WRK-4 reference
-host/CLI, WRK-5 dev write surface.
+host/CLI, WRK-5 dev write surface, WRK-6 installable bundle.
