@@ -436,34 +436,35 @@
 
   // Draft-backed editor for doc blocks, deck slides and sheet rows. Input edits
   // mutate the draft object so a CAS refusal re-renders the unsaved text.
-  function kindEditor(kind, draft, onChange) {
+  function kindEditor(kind, draft, touch, redraw) {
     if (kind === "doc") {
       return el("div", { class: "works-blocks" }, draft.blocks.map(function (block, index) {
-        var typeSelect = el("select", { "aria-label": "Block type", on: { change: function (e) { block.type = e.target.value; onChange(); } } },
+        var typeSelect = el("select", { "aria-label": "Block type", on: { change: function (e) { block.type = e.target.value; redraw(); } } },
           DOC_BLOCK_TYPES.map(function (t) {
             var o = el("option", { value: t, text: t });
             if (t === block.type) o.setAttribute("selected", "");
             return o;
           }));
-        var text = el("textarea", { "aria-label": "Block text", on: { input: function (e) { block.text = e.target.value; } } });
+        var text = el("textarea", { "aria-label": "Block text", on: { input: function (e) { block.text = e.target.value; touch(); } } });
         text.value = block.text;
         return el("div", { class: "works-block" }, [typeSelect, text,
-          el("button", { type: "button", text: "Remove", on: { click: function () { draft.blocks.splice(index, 1); onChange(); } } })]);
-      }).concat([el("button", { type: "button", text: "Add block", on: { click: function () { draft.blocks.push({ type: "p", text: "" }); onChange(); } } })]));
+          el("button", { type: "button", text: "Remove", on: { click: function () { draft.blocks.splice(index, 1); redraw(); } } })]);
+      }).concat([el("button", { type: "button", text: "Add block", on: { click: function () { draft.blocks.push({ type: "p", text: "" }); redraw(); } } })]));
     }
     if (kind === "deck") {
       return el("div", { class: "works-slides" }, draft.slides.map(function (slide, index) {
-        var title = el("input", { "aria-label": "Slide title", on: { input: function (e) { slide.title = e.target.value; } } });
+        var title = el("input", { "aria-label": "Slide title", on: { input: function (e) { slide.title = e.target.value; touch(); } } });
         title.value = slide.title;
-        var body = el("textarea", { "aria-label": "Slide body", on: { input: function (e) { slide.body = e.target.value; } } });
+        var body = el("textarea", { "aria-label": "Slide body", on: { input: function (e) { slide.body = e.target.value; touch(); } } });
         body.value = slide.body;
         return el("div", { class: "works-slide" }, [title, body,
-          el("button", { type: "button", text: "Remove", on: { click: function () { draft.slides.splice(index, 1); onChange(); } } })]);
-      }).concat([el("button", { type: "button", text: "Add slide", on: { click: function () { draft.slides.push({ title: "", body: "" }); onChange(); } } })]));
+          el("button", { type: "button", text: "Remove", on: { click: function () { draft.slides.splice(index, 1); redraw(); } } })]);
+      }).concat([el("button", { type: "button", text: "Add slide", on: { click: function () { draft.slides.push({ title: "", body: "" }); redraw(); } } })]));
     }
     // sheet: columns and rows as a text grid; cells are strings or numbers.
     var header = el("input", { "aria-label": "Columns (comma separated)", on: { input: function (e) {
       draft.columns = e.target.value.split(",").map(function (c) { return c.trim(); });
+      touch();
     } } });
     header.value = draft.columns.join(", ");
     return el("div", { class: "works-sheet" }, [header,
@@ -473,10 +474,10 @@
       } } })
     ].concat(draft.rows.map(function (row, r) {
       return el("div", { class: "works-row-cells" }, row.map(function (cell, c) {
-        var input = el("input", { "aria-label": "Cell " + (r + 1) + "-" + (c + 1), on: { input: function (e) { row[c] = e.target.value; } } });
+        var input = el("input", { "aria-label": "Cell " + (r + 1) + "-" + (c + 1), on: { input: function (e) { row[c] = e.target.value; touch(); } } });
         input.value = String(cell);
         return input;
-      }).concat([el("button", { type: "button", text: "Remove row", on: { click: function () { draft.rows.splice(r, 1); onChange(); } } })]));
+      }).concat([el("button", { type: "button", text: "Remove row", on: { click: function () { draft.rows.splice(r, 1); redraw(); } } })]));
     })));
   }
 
@@ -530,15 +531,17 @@
       draft.kind = e.target.value;
       if (draft.kind === "sheet" && !draft.columns.length) draft.columns = ["Item"];
       if (draft.kind === "deck" && !draft.slides.length) draft.slides = [{ title: "", body: "" }];
-      render();
+      redraw();
     } } }, KINDS.map(function (kind) {
       var o = el("option", { value: kind, text: KIND_LABEL[kind] });
       if (kind === draft.kind) o.setAttribute("selected", "");
       return o;
     }));
-    var title = el("input", { name: "title", placeholder: "Name", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; } } });
+    var touch = function () { if (state.draft) state.draft.dirty = true; };
+    var redraw = function () { touch(); render(); };
+    var title = el("input", { name: "title", placeholder: "Name", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; touch(); } } });
     title.value = draft.title;
-    var editor = kindEditor(draft.kind, draft, render);
+    var editor = kindEditor(draft.kind, draft, touch, redraw);
     return el("div", { class: "works-form" }, [
       el("h2", { text: "New document" }),
       el("label", null, [el("span", { text: "Kind" }), kindSelect]),
@@ -549,12 +552,15 @@
   }
 
   function detailView(item) {
-    var draft = state.draft && state.draft.item === item.id ? state.draft.edit : draftFromItem(item);
-    state.draft = { item: item.id, edit: draft };
-    var markDirty = function () { state.draft.dirty = true; render(); };
-    var title = el("input", { name: "title", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; markDirty(); } } });
+    var sameItem = state.draft && state.draft.item === item.id;
+    var draft = sameItem ? state.draft.edit : draftFromItem(item);
+    var wasDirty = sameItem ? !!state.draft.dirty : false;
+    var touch = function () { if (state.draft) state.draft.dirty = true; };
+    var redraw = function () { touch(); render(); };
+    state.draft = { item: item.id, edit: draft, dirty: wasDirty };
+    var title = el("input", { name: "title", "aria-label": "Name", on: { input: function (e) { draft.title = e.target.value; touch(); } } });
     title.value = draft.title;
-    var editor = kindEditor(item.kind, draft, markDirty);
+    var editor = kindEditor(item.kind, draft, touch, redraw);
     var exportable = item.exportState === "ready";
     var actions = el("div", { class: "works-actions" }, [
       el("button", { type: "button", disabled: state.busy, text: "Save", on: { click: function () { saveItem(item, draft); } } }),
