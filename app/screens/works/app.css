@@ -1,12 +1,13 @@
-/* Follow the host screen kit; fall back to the light palette. */
+/* Use the host screen kit tokens (cadence-kit/1); the fallbacks keep the
+ * screen readable in a light frame when the kit is absent. */
 :root {
   color-scheme: light dark;
 }
 body {
   margin: 0;
   font: 14px/1.45 system-ui, sans-serif;
-  color: var(--fg, #1d1d1f);
-  background: var(--surface, transparent);
+  color: var(--color-ink-100, #1d1d1f);
+  background: var(--color-ink-900, #fff);
 }
 .works-app {
   padding: 16px;
@@ -14,7 +15,7 @@ body {
   gap: 12px;
 }
 .works-app h1 {
-  color: var(--fg, #1d1d1f);
+  color: var(--color-ink-100, #1d1d1f);
 }
 .works-row {
   display: grid;
@@ -23,10 +24,10 @@ body {
   width: 100%;
   text-align: left;
   padding: 8px;
-  border: 1px solid var(--border, #d2d2d7);
+  border: 1px solid var(--color-edge, #d2d2d7);
   border-radius: 6px;
-  background: var(--surface, #fff);
-  color: var(--fg, #1d1d1f);
+  background: var(--color-ink-850, #fff);
+  color: var(--color-ink-100, #1d1d1f);
   cursor: pointer;
 }
 .works-row[disabled] {
@@ -40,7 +41,7 @@ body {
 .works-form label {
   display: grid;
   gap: 4px;
-  color: var(--fg, #1d1d1f);
+  color: var(--color-ink-300, #1d1d1f);
 }
 .works-form input,
 .works-form select,
@@ -51,9 +52,9 @@ body {
 .works-slides input,
 .works-slides textarea,
 .works-sheet input {
-  color: var(--fg, #1d1d1f);
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #d2d2d7);
+  color: var(--color-ink-100, #1d1d1f);
+  background: var(--color-ink-875, #fff);
+  border: 1px solid var(--color-edge, #d2d2d7);
   border-radius: 6px;
   padding: 6px;
   font: inherit;
@@ -64,22 +65,25 @@ body {
 .works-notice {
   padding: 8px 10px;
   border-radius: 6px;
-  background: var(--surface, #f5f5f7);
-  color: var(--fg, #1d1d1f);
+  background: var(--color-ink-850, #f5f5f7);
+  color: var(--color-ink-100, #1d1d1f);
 }
 .works-notice.refused {
-  background: #fdecea;
-  color: #8a1c12;
+  color: var(--color-fail, #8a1c12);
 }
 .works-actions button,
 .works-row button {
-  color: var(--fg, #1d1d1f);
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #d2d2d7);
+  color: var(--color-ink-100, #1d1d1f);
+  background: var(--color-ink-850, #fff);
+  border: 1px solid var(--color-edge, #d2d2d7);
   border-radius: 6px;
   padding: 6px 10px;
   font: inherit;
   cursor: pointer;
+}
+.works-actions button:hover,
+.works-row button:hover {
+  border-color: var(--color-edge-hover, #b0b0b7);
 }
 .works-actions button:disabled,
 .works-row button:disabled {
@@ -88,5 +92,5 @@ body {
 }
 .works-empty,
 .works-trashed {
-  color: var(--muted, #6e6e73);
+  color: var(--color-ink-400, #6e6e73);
 }
