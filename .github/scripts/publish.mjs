@@ -1,4 +1,4 @@
-// WRK-7: turn a version release into a reviewed-by-CI marketplace PR.
+// AOS-376: turn a version release into a reviewed-by-CI marketplace PR.
 // The tenant's install/approve is the product gate; this script only moves bytes.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 const APP_DIR = "app";
-const REPO = "favcrm/cadence-app-works";
+const REPO = process.env.GITHUB_REPOSITORY ?? "favcrm/cadence-app-works";
+const ISSUE = process.env.PUBLISH_ISSUE ?? "AOS-376";
 const MARKETPLACE = "agenticos-stack/agenticos-v2";
 const token = process.env.MARKETPLACE_TOKEN;
 const dryRun = process.env.DRY_RUN === "1";
@@ -31,30 +32,55 @@ function sha256(buf) {
 }
 
 const check = JSON.parse(readFileSync(process.env.APP_CHECK_JSON ?? "/tmp/app-check.json", "utf8"));
-if (!check.ok) throw new Error("app check refused: " + JSON.stringify(check.refusals ?? check));
+if (!check.ok) throw new Error("app check refused: " + JSON.stringify(check.refusal ?? check));
 const digest = check.digest;
-const version = check.version ?? (readFileSync("app/app.md", "utf8").match(/^version:\s*['"]?([^'"\n]+)['"]?$/m)?.[1]);
-if (!digest || !version) throw new Error("app check did not report a version and digest");
+const version = check.version;
+const app = check.name;
+if (!digest || !version || !app || !check.title || !check.summary || !check.listing) {
+  throw new Error(
+    "app check did not report the manifest identity and listing; " +
+      "add `listing:` to app.md and run a Cadence build that reports it",
+  );
+}
+// The workflow runs the target host's install-check before this step. Keep
+// the two reports honest when both are supplied: the same bytes, the same
+// digest, and an explicit compatible result.
+const installCheckPath = process.env.APP_INSTALL_CHECK_JSON;
+if (installCheckPath) {
+  const installCheck = JSON.parse(readFileSync(installCheckPath, "utf8"));
+  if (installCheck.error || installCheck.compatibility?.compatible !== true) {
+    throw new Error(
+      "install-check refused: " +
+        JSON.stringify(installCheck.error ?? installCheck.compatibility ?? installCheck),
+    );
+  }
+  if (installCheck.digest !== digest) {
+    throw new Error("install-check digest does not match app check");
+  }
+}
 
-const catalogue = JSON.parse(readFileSync("catalogue.json", "utf8"));
 const files = {};
 for (const full of walk(APP_DIR).sort()) files[relative(APP_DIR, full)] = readFileSync(full, "utf8");
 const upload = JSON.stringify({ files }, null, 2) + "\n";
-const artifact = `marketplace/releases/${catalogue.id}/${version}/upload.json`;
+const artifact = `marketplace/releases/${app}/${version}/upload.json`;
 const entry = {
-  ...catalogue,
+  id: app,
+  app,
+  title: check.title,
+  summary: check.summary,
   version,
+  listing: check.listing,
   source: { repo: REPO, commit: process.env.GITHUB_SHA, path: APP_DIR },
   artifact: { path: artifact, sha256: sha256(upload) },
   digest,
 };
 
 function applyTo(dir) {
-  mkdirSync(join(dir, "marketplace/releases", catalogue.id, version), { recursive: true });
+  mkdirSync(join(dir, "marketplace/releases", app, version), { recursive: true });
   writeFileSync(join(dir, artifact), upload);
   const manifestPath = join(dir, "marketplace/apps.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const index = manifest.apps.findIndex((a) => a.id === catalogue.id);
+  const index = manifest.apps.findIndex((a) => a.id === app);
   const current = index >= 0 ? manifest.apps[index] : null;
   const artifactPath = join(dir, artifact);
   const sameBytes = statSync(artifactPath, { throwIfNoEntry: false }) && sha256(readFileSync(artifactPath)) === sha256(upload);
@@ -108,13 +134,13 @@ const dir = mkdtempSync(join(tmpdir(), "marketplace-"));
 const url = `https://x-access-token:${token}@github.com/${MARKETPLACE}.git`;
 sh("git", ["clone", "--depth=1", "--branch", "staging", url, dir], process.cwd());
 if (!applyTo(dir)) process.exit(0);
-sh("git", ["-c", "user.name=cadence-release-bot", "-c", "user.email=release-bot@favcrm.local", "checkout", "-b", `publish/${catalogue.id}-${version}`], dir);
+sh("git", ["-c", "user.name=cadence-release-bot", "-c", "user.email=release-bot@favcrm.local", "checkout", "-b", `publish/${app}-${version}`], dir);
 sh("git", ["add", "-A"], dir);
-sh("git", ["-c", "user.name=cadence-release-bot", "-c", "user.email=release-bot@favcrm.local", "commit", "-m", `Publish ${catalogue.id} ${version}`], dir);
-sh("git", ["push", "origin", `publish/${catalogue.id}-${version}`], dir, { GH_TOKEN: token });
-const title = `Publish ${catalogue.id} ${version}`;
-const body = `Automated release from ${REPO}@${process.env.GITHUB_SHA}.\n\n- Bundle: ${artifact} (sha256:${entry.artifact.sha256})\n- Digest: ${digest}\n- Review is the tenant install/approve; the marketplace CI gates the merge.\n\nIssue: WRK-7`;
-const pr = sh("gh", ["pr", "create", "--repo", MARKETPLACE, "--base", "staging", "--head", `publish/${catalogue.id}-${version}`, "--title", title, "--body", body], dir, { GH_TOKEN: token }).trim();
+sh("git", ["-c", "user.name=cadence-release-bot", "-c", "user.email=release-bot@favcrm.local", "commit", "-m", `Publish ${app} ${version}`], dir);
+sh("git", ["push", "origin", `publish/${app}-${version}`], dir, { GH_TOKEN: token });
+const title = `Publish ${app} ${version}`;
+const body = `Automated release from ${REPO}@${process.env.GITHUB_SHA}.\n\n- Bundle: ${artifact} (sha256:${entry.artifact.sha256})\n- Digest: ${digest}\n- Review is the tenant install/approve; the marketplace CI gates the merge.\n\nIssue: ${ISSUE}`;
+const pr = sh("gh", ["pr", "create", "--repo", MARKETPLACE, "--base", "staging", "--head", `publish/${app}-${version}`, "--title", title, "--body", body], dir, { GH_TOKEN: token }).trim();
 console.log(pr);
 try {
   sh("gh", ["pr", "merge", pr, "--repo", MARKETPLACE, "--auto", "--merge"], dir, { GH_TOKEN: token });

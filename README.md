@@ -138,3 +138,20 @@ undici's keep-alive sockets; the test servers are closed before exit.
 
 WRK-1 scaffold, WRK-2 read-only surface, WRK-3 contract/fixture, WRK-4 reference
 host/CLI, WRK-5 dev write surface, WRK-6 installable bundle.
+
+## Publish
+
+`app.md` is the release manifest; its `listing` block is the catalogue copy.
+Tag `vX.Y.Z`, or run the `publish` workflow manually, and the workflow:
+
+1. runs `cadence app check app` and builds the catalogue entry from the
+   manifest (no `catalogue.json`, no hand-written `upload.json`);
+2. installs the **target** Cadence release — the `cadence_version` input or the
+   `CADENCE_TARGET_VERSION` repository variable, else latest — starts a clean
+   temporary daemon, and runs `cadence app catalog install-check app`;
+3. refuses before publishing when the target host cannot install the bundle
+   (missing contract or assistant action), and otherwise publishes through
+   GitHub OIDC (or opens the fallback marketplace PR).
+
+`DRY_RUN=1 node .github/scripts/publish.mjs` prints the entry and artifact hash
+without writing. The gate is the target host, not only the offline bundle check.
