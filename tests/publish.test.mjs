@@ -45,7 +45,14 @@ function publish(root, extra = {}) {
 }
 
 test("publish builds the entry from app check and the manifest listing", () => {
-  const root = fixture({ compatibility: { compatible: true }, digest: DIGEST });
+  const root = fixture({
+    compatibility: {
+      compatible: true,
+      host: { core: "0.2.6" },
+      contracts: { "app-screens": [1] },
+    },
+    digest: DIGEST,
+  });
   const result = publish(root);
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
@@ -53,6 +60,11 @@ test("publish builds the entry from app check and the manifest listing", () => {
   assert.equal(output.entry.version, "0.2.2");
   assert.equal(output.entry.listing.tagline, check.listing.tagline);
   assert.equal(output.entry.artifact.sha256.length, 64);
+  assert.deepEqual(output.entry.compatibility, {
+    host: "0.2.6",
+    compatible: true,
+    contracts: { "app-screens": [1] },
+  });
 });
 
 test("publish refuses when the install-check report is absent", () => {
