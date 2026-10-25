@@ -55,6 +55,13 @@ test("publish builds the entry from app check and the manifest listing", () => {
   assert.equal(output.entry.artifact.sha256.length, 64);
 });
 
+test("publish refuses when the install-check report is absent", () => {
+  const root = fixture({ compatibility: { compatible: true }, digest: DIGEST });
+  const result = publish(root, { APP_INSTALL_CHECK_JSON: "" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /install-check report is required/);
+});
+
 test("publish refuses an install-check that did not pass", () => {
   const root = fixture({ error: "app-assistant.json: unknown action" });
   const result = publish(root);

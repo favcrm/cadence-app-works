@@ -153,5 +153,5 @@ Tag `vX.Y.Z`, or run the `publish` workflow manually, and the workflow:
    (missing contract or assistant action), and otherwise publishes through
    GitHub OIDC (or opens the fallback marketplace PR).
 
-`DRY_RUN=1 node .github/scripts/publish.mjs` prints the entry and artifact hash
-without writing. The gate is the target host, not only the offline bundle check.
+`DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json APP_INSTALL_CHECK_JSON=/tmp/app-install-check.json node .github/scripts/publish.mjs` prints the entry and artifact hash
+without writing; the install-check report is required even for a dry run. The gate is the target host, not only the offline bundle check.
