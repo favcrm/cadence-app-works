@@ -1,7 +1,7 @@
 ---
 app: works
 title: Works
-version: '0.2.2'
+version: '0.3.0'
 summary: 'Docs, decks and sheets with review and export gates. Create, edit and review on the host; export receipts only for approved revisions.'
 needs:
   connections: []
@@ -13,6 +13,7 @@ needs:
       app-screens: [1]
       screen-records: [1]
       app-views: [1]
+      app-storage: [1]
 listing:
   tagline: Docs, decks and sheets with review and export gates
   icon: assets/works.svg
@@ -45,3 +46,42 @@ recorded by the host for the approved current revision.
 The app does not approve its own content, choose a reviewer, or mark anything
 exported. A workflow `document-draft` produces a local text draft; it does not
 mutate Works and makes no content-approval claim.
+
+## App-owned storage (0.3.0, AOS-384)
+
+This package owns its logical content schema. `app-storage.json` declares
+`app-storage/v1` at `schema_version` 1 with one ordered migration under
+`storage/`; the migration's `sha256` is the exact raw-byte digest of that file.
+A host refuses the package if the migration is missing or its bytes differ from
+the declared hash, and `needs.requires.contracts` must list `app-storage: [1]`
+for the descriptor to install at all. `record_kind` is `document`.
+
+The descriptor declares `default_table: null`, no `record_search_columns` and no
+`record_write_schema`. There is no generic record list/show/create/update bridge
+for Works: the generic read path would bypass the host's trash, revision and
+review projection, and a generic write would bypass revision, review and export
+authority. A trusted host adapter resolves the explicit logical `documents`
+handle, and the nine `works.*` operations are the only interface.
+
+The `documents` table holds only the material the screen reads and writes:
+`kind` (`doc`, `deck`, `sheet`), `title`, `tags` and the kind payload columns
+`blocks` (doc), `slides` (deck) and `columns`/`rows` (sheet). The host owns the
+reserved `id`, `context_id`, `revision`, `created_at` and `updated_at` columns,
+plus every owner/author, review, approval, export, trash and history record.
+Those authority fields are not app columns, are absent from `app-storage.json`,
+and cannot be written through the package.
+
+A flattened row is storage, not the content value: the host reconstructs the
+native content object for the kind (`{blocks}`, `{slides}` or `{columns, rows}`)
+and omits the other payload columns entirely. Null irrelevant fields must not
+enter that object, because the content digest is computed over the native
+`{kind,title,content}` value and must match the stored revision digest.
+
+Native Cadence has no app-storage execution runtime and refuses the
+syntactically valid `app-storage: [1]` requirement. The hosted v2 runtime
+admits `works.*` operation names but has no Works domain backend, no
+`slot-prepare`/`slot-confirm` executor for the existing host-drawn review/export
+confirmation, and no verified-second-reviewer authority yet; this package does
+not install or claim runtime acceptance there until that host seam lands. The
+offline check in `scripts/check-scaffold.mjs` proves member shape, checksums and
+the content boundary only.
