@@ -70,10 +70,18 @@ row.
 The payload columns intentionally carry no `json_schema`: the host's bounded
 JSON Schema value limits (256 array items, 4096 nodes) are narrower than the
 native Works grammar, so a deck or sheet the native host accepted must not be
-rejected at adoption. `record_kind` is `document` and `default_table` is
-`documents`. `record_write_schema` is `false` and `record_search_columns` is
-`["title", "tags"]`: the generic record bridge cannot write Works content, and
-the nine `works.*` host operations are the only write path.
+rejected at adoption. `record_kind` is `document`; `default_table` is `null` and
+`record_search_columns`/`record_write_schema` are omitted, so no generic record
+list/show/create/update bridge is exposed for `documents`. A trusted host
+adapter resolves the explicit logical table handle, and the nine `works.*`
+operations are the only interface.
+
+A flattened row is not the content value. The host reconstructs `{blocks}` for
+a doc, `{slides}` for a deck, or `{columns, rows}` for a sheet, omitting the
+other payload columns entirely and never materializing their nulls. The content
+digest is computed over that reconstructed native `{kind,title,content}` value;
+including null irrelevant fields would change the digest and break adoption and
+export references.
 
 ### Adoption and material change
 

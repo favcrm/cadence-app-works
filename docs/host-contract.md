@@ -143,9 +143,9 @@ host accepts an explicit actor; the installed screen never sends one.
 
 ### App-owned table
 
-`app/app-storage.json` declares `app-storage/v1`, `record_kind: "document"`,
-`default_table: "documents"`, `record_search_columns: ["title", "tags"]` and
-`record_write_schema: false`. `app/storage/001-documents.json` is the ordered
+`app/app-storage.json` declares `app-storage/v1`, `record_kind: "document"`
+and `default_table: null`, with no `record_search_columns` and no
+`record_write_schema`. `app/storage/001-documents.json` is the ordered
 migration and its raw-byte digest is pinned in the descriptor. The declared
 table is exactly:
 
@@ -167,11 +167,30 @@ ceiling), because the native content grammar already bounds one kind payload to
 items, 4096 nodes) are narrower than the native grammar, and adoption must not
 reject content the native host accepted.
 
-`record_write_schema: false` is deliberate. The generic `records.create`/
-`records.update` bridge must not write `documents`: it cannot create the
-immutable revision, audit row, CAS result or review invalidation that a Works
-mutation requires. The screen declares only the nine `works.*` operations, and
-those operations are the only write path.
+The package deliberately declares no generic record bridge: `default_table` is
+`null`, and `record_search_columns` and `record_write_schema` are omitted. A
+trusted host adapter resolves the explicit logical `documents` handle
+(`appStorage.table(installId, "documents")`) and the nine `works.*` operations
+are the only interface. The host's generic record resolver already refuses a
+null default table (`apps/api/src/tenant-board/app-records.ts:386`), so no
+`records.list`/`show`/`create`/`update` can reach `documents`. A generic read
+would be a second projection that could bypass the host's trashed/revision/review
+filters; a generic write would bypass the immutable revision, audit, CAS and
+review invalidation that a Works mutation requires. Do not add a default table
+or a write schema to make the screen work.
+
+**Reconstruct content, not the row.** A flattened `documents` row is storage,
+not the native content value. Before hashing, comparing or exporting material,
+build the kind's closed content object and omit every other payload column:
+
+- `doc` → `{ "blocks": <blocks> }`
+- `deck` → `{ "slides": <slides> }`
+- `sheet` → `{ "columns": <columns>, "rows": <rows> }`
+
+Never include `null` keys for the irrelevant columns. The content digest is
+computed over `{kind, title, content}` with that reconstructed object and must
+equal the immutable revision's stored digest; including null payload members or
+the host base columns changes the digest and breaks adoption/export.
 
 ### Host authority (never app columns)
 
@@ -246,10 +265,12 @@ the confirmation instead of acting on a stale card. The export receipt's
 
 The native store publishes two different digests:
 
-- **Content digest** covers `{kind, title, content}` only. It is the immutable
-  revision digest, the card's `contentDigest`, and the export receipt digest.
-  Tags are deliberately excluded so re-tagging does not rewrite review/export
-  material.
+- **Content digest** covers `{kind, title, content}` only. `content` is the
+  kind's reconstructed object from the flattened row (`{blocks}`, `{slides}` or
+  `{columns, rows}`), with no null irrelevant payload members. It is the
+  immutable revision digest, the card's `contentDigest`, and the export receipt
+  digest. Tags are deliberately excluded so re-tagging does not rewrite
+  review/export material.
 - **Payload digest** covers `{kind, title, content, tags}`. It is only the
   idempotency payload fingerprint; two mutations that differ only in tags must
   not replay as the same request.
@@ -296,9 +317,10 @@ revision:
    and `trashed` in the host tables.
 3. Copy every native immutable revision, including its `content_json`, author
    and timestamp. Recompute the canonical content digest from
-   `{kind,title,content}` (tags excluded) and require it to equal the stored
-   native digest. A mismatch refuses adoption: never rewrite a digest that a
-   review or export receipt referenced.
+   `{kind,title,content}` where `content` is rebuilt from the flattened columns
+   for that kind (only `blocks`, `slides` or `columns`+`rows`, no null members)
+   and require it to equal the stored native digest. A mismatch refuses
+   adoption: never rewrite a digest that a review or export receipt referenced.
 4. Copy audit and idempotency rows. Recompute each idempotency payload digest
    from `{kind,title,content,tags}` and keep its stored result. A replayed key
    must resolve to the same stored result or refuse as a conflict; it must
@@ -374,7 +396,20 @@ is per install, and the Works host tables are scoped by `install_id` and
 5. **Works adoption.** As above: the legacy adoption allowlist, fixed record
    kind and shape rebuild are CRM-shaped and must not be stretched to cover
    Works.
-6. **No fallback.** The dev reference host, fixtures and `dev/` pages remain
+6. **No trusted Works implementation reaches the DO.** The canonical store is
+   Rust `impl RecordStore` over `rusqlite` (`src/store/app_works.rs`:
+   `write_tx`, `now`, per-install record file); it has no WASM/FFI export or
+   portable operation artifact. Hosted v2's only wasm bridge
+   (`apps/api/src/hosted-cadence/wasm-rules.ts`, `core.wasm`) exposes exactly
+   `app.manifest.preflight`, `issue.validate` and `issue.readiness`; it has no
+   Works op and no SQL handle. Reusing the trusted native rules therefore
+   requires either a new TypeScript `TenantWorks` port over
+   `ReadModelSql` + the explicit `documents` handle + the host authority
+   tables, or a new approved host primitive/domain interpreter. A descriptor-only
+   package cannot execute, so runtime integration stays blocked on the AOS
+   durable-kernel decision; do not claim the schema change completes the
+   feature.
+7. **No fallback.** The dev reference host, fixtures and `dev/` pages remain
    development evidence. Do not wire them, a JSON store or a generic
    records-only CRUD path to satisfy `works.*`.
 

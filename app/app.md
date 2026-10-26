@@ -54,8 +54,14 @@ This package owns its logical content schema. `app-storage.json` declares
 `storage/`; the migration's `sha256` is the exact raw-byte digest of that file.
 A host refuses the package if the migration is missing or its bytes differ from
 the declared hash, and `needs.requires.contracts` must list `app-storage: [1]`
-for the descriptor to install at all. `record_kind` is `document`; the host
-bridges the table under that kind rather than inferring one from the app name.
+for the descriptor to install at all. `record_kind` is `document`.
+
+The descriptor declares `default_table: null`, no `record_search_columns` and no
+`record_write_schema`. There is no generic record list/show/create/update bridge
+for Works: the generic read path would bypass the host's trash, revision and
+review projection, and a generic write would bypass revision, review and export
+authority. A trusted host adapter resolves the explicit logical `documents`
+handle, and the nine `works.*` operations are the only interface.
 
 The `documents` table holds only the material the screen reads and writes:
 `kind` (`doc`, `deck`, `sheet`), `title`, `tags` and the kind payload columns
@@ -65,11 +71,11 @@ plus every owner/author, review, approval, export, trash and history record.
 Those authority fields are not app columns, are absent from `app-storage.json`,
 and cannot be written through the package.
 
-`record_write_schema` is `false`: Works mutations run only through the nine
-`works.*` host operations so the host can write the content row, its immutable
-revision, idempotency record and audit entry in one transaction. A generic
-record write would bypass revision, review and export authority and is refused
-at the app-storage boundary.
+A flattened row is storage, not the content value: the host reconstructs the
+native content object for the kind (`{blocks}`, `{slides}` or `{columns, rows}`)
+and omits the other payload columns entirely. Null irrelevant fields must not
+enter that object, because the content digest is computed over the native
+`{kind,title,content}` value and must match the stored revision digest.
 
 Native Cadence has no app-storage execution runtime and refuses the
 syntactically valid `app-storage: [1]` requirement. The hosted v2 runtime

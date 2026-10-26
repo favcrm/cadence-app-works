@@ -4,9 +4,7 @@
   "record_kind": "document",
   "schema_version": 1,
   "compatible_schema_versions": [1],
-  "default_table": "documents",
-  "record_search_columns": ["title", "tags"],
-  "record_write_schema": false,
+  "default_table": null,
   "migrations": [
     {
       "version": 1,

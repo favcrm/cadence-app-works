@@ -70,9 +70,9 @@ test("the descriptor holds only the Works content record kind and table", () => 
   assert.equal(descriptor.contract, "app-storage/v1");
   assert.equal(descriptor.app, "works");
   assert.equal(descriptor.record_kind, "document");
-  assert.equal(descriptor.default_table, "documents");
-  assert.equal(descriptor.record_write_schema, false);
-  assert.deepEqual(descriptor.record_search_columns, ["title", "tags"]);
+  assert.equal(descriptor.default_table, null);
+  assert.equal(Object.hasOwn(descriptor, "record_write_schema"), false);
+  assert.equal(Object.hasOwn(descriptor, "record_search_columns"), false);
 });
 
 test("a migration whose bytes differ from its declared digest is refused", () => {
@@ -220,6 +220,7 @@ test("the Works model refuses authority in the descriptor and other tables", () 
   const root = fixture();
   try {
     rewriteDescriptor(root, (descriptor) => {
+      descriptor.default_table = "documents";
       descriptor.record_write_schema = true;
       descriptor.record_search_columns = ["title", "reviewed_revision"];
     });
@@ -232,8 +233,9 @@ test("the Works model refuses authority in the descriptor and other tables", () 
     });
     const model = validateAppStoragePackage(root);
     const errors = [...model.errors, ...validateWorksStorage(model)];
-    assert.ok(errors.some((error) => /record_write_schema must refuse/.test(error)));
-    assert.ok(errors.some((error) => /record_search_columns names undeclared/.test(error)));
+    assert.ok(errors.some((error) => /default_table must be null/.test(error)));
+    assert.ok(errors.some((error) => /must not declare record_write_schema/.test(error)));
+    assert.ok(errors.some((error) => /must not declare record_search_columns/.test(error)));
     assert.ok(errors.some((error) => /non-content table "reviews"/.test(error)));
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -251,4 +253,51 @@ test("the declared content bounds mirror the native Works limits", () => {
   const tags = table.columns.find((column) => column.name === "tags");
   assert.equal(tags.json_schema.maxItems, APP_STORAGE_LIMITS.tags);
   assert.equal(tags.json_schema.items.maxLength, APP_STORAGE_LIMITS.tagCharacters);
+});
+
+test("flattened document columns reconstruct the native kind content without null keys", () => {
+  // The host must feed the native canonical `content` value to the digest, not
+  // the whole row. Irrelevant payload columns are null storage, not content.
+  const contentForDigest = (row) => {
+    if (row.kind === "doc") return { blocks: row.blocks };
+    if (row.kind === "deck") return { slides: row.slides };
+    return { columns: row.columns, rows: row.rows };
+  };
+  const cases = [
+    {
+      row: {
+        kind: "doc",
+        blocks: [{ type: "p", text: "a" }],
+        slides: null,
+        columns: null,
+        rows: null,
+      },
+      keys: ["blocks"],
+    },
+    {
+      row: {
+        kind: "deck",
+        blocks: null,
+        slides: [{ title: "a", body: "b" }],
+        columns: null,
+        rows: null,
+      },
+      keys: ["slides"],
+    },
+    {
+      row: {
+        kind: "sheet",
+        blocks: null,
+        slides: null,
+        columns: ["A"],
+        rows: [["1"]],
+      },
+      keys: ["columns", "rows"],
+    },
+  ];
+  for (const { row, keys } of cases) {
+    const content = contentForDigest(row);
+    assert.deepEqual(Object.keys(content), keys);
+    assert.equal(JSON.stringify(content).includes("null"), false);
+  }
 });

@@ -137,17 +137,23 @@ patch/trash/restore take `--if-revision`.
 
 `app/app-storage.json` declares `app-storage/v1` at `schema_version` 1 with one
 migration, `storage/001-documents.json`, whose raw-byte `sha256` is pinned in the
-descriptor. The `documents` table holds only `kind`, `title`, `tags`, `blocks`,
-`slides`, `columns` and `rows`; the host reserves `id`, `context_id`, `revision`,
+descriptor. `default_table` is `null` and no `record_search_columns` or
+`record_write_schema` is declared, so the generic records bridge never exposes
+`documents`; a trusted host adapter uses the explicit logical table handle. The
+`documents` table holds only `kind`, `title`, `tags`, `blocks`, `slides`,
+`columns` and `rows`; the host reserves `id`, `context_id`, `revision`,
 `created_at` and `updated_at`, and review/export/owner/history state stays in
-host tables. The exact contract, digest split, adoption mapping and
+host tables. Flattened rows reconstruct the native kind content (`{blocks}`,
+`{slides}` or `{columns, rows}`) without null irrelevant fields before digest,
+adoption or export. The exact contract, digest split, adoption mapping and
 material-change invalidation rule are in `docs/content-model.md` and
 `docs/host-contract.md`.
 
 `scripts/app-storage.mjs` checks descriptor shape, contiguous versions,
 raw-byte migration checksums, operation grammar, base/authority column refusal,
-bounds, default/search columns and the Works content boundary. It is offline
-package validation only; the host's app-storage validator owns execution.
+bounds, the null default-table/no-bridge rule and the Works content boundary. It
+is offline package validation only; the host's app-storage validator owns
+execution.
 
 ## Checks
 

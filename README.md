@@ -16,9 +16,9 @@ see `docs/host-contract.md`.
 - `app/app-storage.json` and `app/storage/001-documents.json`: the
   `app-storage/v1` descriptor and its one raw-byte-checksummed migration. They
   declare the `documents` content table (`kind`, `title`, `tags`, `blocks`,
-  `slides`, `columns`, `rows`), `record_kind: "document"`, `records.*` writes
-  refused and no review/export/actor columns. The migration creates the table
-  and the `documents_kind` index.
+  `slides`, `columns`, `rows`), `record_kind: "document"`, `default_table: null`
+  and no generic record read/write bridge, and no review/export/actor columns.
+  The migration creates the table and the `documents_kind` index.
 - `app/workflows/document-draft.md`: a local text-draft workflow. It produces
   draft text for a person to paste into Works. It does not mutate Works and
   makes no content-approval claim.
@@ -130,7 +130,7 @@ screen. It is not an installed screen.
 ```sh
 node scripts/check-scaffold.mjs            # package validation: bundle, manifest, workflow, views, screen digests, dev-tool syntax
 node --test --test-force-exit tests/*.test.mjs
-cadence app check app                      # host validator; exit 0 on pass
+cadence app check app                      # authoritative host validator; a pre-AOS-384 native host refuses app-storage
 ```
 
 CI runs the first two. `cadence app check app` runs the host's offline

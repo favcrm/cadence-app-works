@@ -585,14 +585,20 @@ export function validateWorksStorage(model) {
   if (descriptor.record_kind !== "document") {
     errors.push('app-storage record_kind is not "document"');
   }
-  if (descriptor.default_table !== "documents") {
-    errors.push('app-storage default_table is not "documents"');
+  if (descriptor.default_table !== null) {
+    errors.push(
+      "app-storage default_table must be null; the trusted Works adapter uses the explicit documents handle",
+    );
   }
-  if (descriptor.record_write_schema !== false) {
-    errors.push("app-storage record_write_schema must refuse generic record writes");
+  if (Object.hasOwn(descriptor, "record_write_schema")) {
+    errors.push(
+      "app-storage must not declare record_write_schema; there is no generic record write bridge",
+    );
   }
-  if (JSON.stringify(descriptor.record_search_columns) !== JSON.stringify(["title", "tags"])) {
-    errors.push('app-storage record_search_columns must be ["title", "tags"]');
+  if (Object.hasOwn(descriptor, "record_search_columns")) {
+    errors.push(
+      "app-storage must not declare record_search_columns; there is no generic record read bridge",
+    );
   }
   for (const table of tables) {
     if (table.name !== "documents") {
