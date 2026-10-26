@@ -263,7 +263,8 @@ the confirmation instead of acting on a stale card. The export receipt's
 
 ### Digest semantics (native, do not approximate)
 
-The native store publishes two different digests:
+Two different digests exist; do not conflate them, and never recompute a
+historical operation fingerprint from the current document.
 
 - **Content digest** covers `{kind, title, content}` only. `content` is the
   kind's reconstructed object from the flattened row (`{blocks}`, `{slides}` or
@@ -271,14 +272,23 @@ The native store publishes two different digests:
   immutable revision digest, the card's `contentDigest`, and the export receipt
   digest. Tags are deliberately excluded so re-tagging does not rewrite
   review/export material.
-- **Payload digest** covers `{kind, title, content, tags}`. It is only the
-  idempotency payload fingerprint; two mutations that differ only in tags must
-  not replay as the same request.
+- **Operation fingerprint** (`app_works_idempotency.payload_digest`) is the
+  material digest of that operation's own request, which differs by operation:
+  - `create` → `{kind, title, content, tags}` (the draft's payload digest);
+  - `patch` → `{id, ifRevision, operations}`;
+  - `trash` / `restore` → `{id, ifRevision, trashed}`;
+  - `request_review`, `review`, `export` → no idempotency row and no
+    fingerprint.
 
-Adoption must recompute both from the imported fields and compare each with its
-stored native value. A migration that changes only tags leaves the content
-digest and review/export authority intact but does change the payload digest
-for future idempotency comparisons.
+  A replay compares the new request's own fingerprint with the stored row and
+  refuses a mismatch. The current document cannot reconstruct a past patch or
+  trash request, so adoption must copy `(op, actor, key, payload_digest,
+  result_json, at)` verbatim and must never rewrite a historical key, digest or
+  result. A tag-only change alters only a future `create` fingerprint; it does
+  not rewrite history and does not change review/export authority.
+
+CAD-1854 is extracting the canonical material string plus its sha256 prefix;
+until that lands, do not approximate either digest.
 
 
 ### Actor and scope derivation
@@ -308,7 +318,7 @@ revision:
 | `owner`, `reviewed_revision`, `review_status`, `pending_revision`, `trashed` | host items table |
 | every `app_works_revisions` row (`revision`, `kind`, `title`, `content_json`, `content_digest`, `author`, `at`) | host revisions table |
 | `app_works_audit` rows | host audit table |
-| `app_works_idempotency` rows | host idempotency table with the recomputed payload digest |
+| `app_works_idempotency` rows | host idempotency table, copied verbatim; never recompute the operation fingerprint |
 
 1. Copy `kind`, `title` and `tags` into `documents`; split `content` into the
    kind's payload columns and leave the other payload columns `null`.
@@ -321,10 +331,12 @@ revision:
    for that kind (only `blocks`, `slides` or `columns`+`rows`, no null members)
    and require it to equal the stored native digest. A mismatch refuses
    adoption: never rewrite a digest that a review or export receipt referenced.
-4. Copy audit and idempotency rows. Recompute each idempotency payload digest
-   from `{kind,title,content,tags}` and keep its stored result. A replayed key
-   must resolve to the same stored result or refuse as a conflict; it must
-   never re-execute a mutation.
+4. Copy audit and idempotency rows exactly: `op`, `actor`, `key`,
+   `payload_digest`, `result_json` and `at`. Do not recompute a historical
+   fingerprint from the current document; a past patch or trash request is not
+   reconstructible from the final content. A replay compares its own
+   operation-specific fingerprint with the stored one and must never
+   re-execute a mutation.
 5. Keep an approved current revision approved only while the material digest is
    unchanged. Any normalization that changes material clears the approval as in
    the migration rule below and records why.

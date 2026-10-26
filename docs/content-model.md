@@ -95,8 +95,10 @@ and review/export references survive adoption:
   kind, title and content snapshot in a host-owned history table. The content
   digest is recomputed from the same canonical `{kind,title,content}` value
   (tags excluded) and must equal the stored native digest; a mismatch refuses
-  adoption instead of silently rewriting a review or export reference. The
-  separate idempotency payload digest covers `{kind,title,content,tags}`.
+  adoption instead of silently rewriting a review or export reference. A
+  historical idempotency row keeps its original operation fingerprint
+  (`create`, `patch`, `trash` or `restore` inputs); it is not recomputed from
+  the current document.
 - `owner`, `reviewed_revision`, `review_status`, `pending_revision` and
   `trashed` remain host authority and never become `documents` columns.
 - An approved current revision stays approved after adoption only while its
