@@ -6,10 +6,19 @@ repository name does not change installation or data identities.
 
 ## Status
 
-WRK-6 makes `app/` an installable bundle (`0.2.0`):
+WRK-6 made `app/` an installable bundle; WRK-10 makes it `0.3.0` with an
+app-owned logical storage schema. The runtime host seam is not implemented yet;
+see `docs/host-contract.md`.
 
-- `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]` and
-  `app-views[1]`. Declares no connections and no capabilities.
+- `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]`,
+  `app-views[1]` and `app-storage[1]`. Declares no connections and no
+  capabilities.
+- `app/app-storage.json` and `app/storage/001-documents.json`: the
+  `app-storage/v1` descriptor and its one raw-byte-checksummed migration. They
+  declare the `documents` content table (`kind`, `title`, `tags`, `blocks`,
+  `slides`, `columns`, `rows`), `record_kind: "document"`, `records.*` writes
+  refused and no review/export/actor columns. The migration creates the table
+  and the `documents_kind` index.
 - `app/workflows/document-draft.md`: a local text-draft workflow. It produces
   draft text for a person to paste into Works. It does not mutate Works and
   makes no content-approval claim.
@@ -22,6 +31,9 @@ WRK-6 makes `app/` an installable bundle (`0.2.0`):
 - `app/assets/works.svg`: listing icon.
 
 The host, not the app, decides who may author, review, approve or export.
+`scripts/check-scaffold.mjs` and `scripts/app-storage.mjs` prove package member
+shape, migration checksums and the content boundary offline; they do not prove
+runtime install, migration execution, adoption or review/export.
 
 ## Installable bundle
 
@@ -34,7 +46,12 @@ cadence app context create <options>                   # optional content defaul
 ```
 
 Install, approval and context are host operations gated by the operator's
-verified session. This repository does not run them.
+verified session. This repository does not run them. A host older than the
+declared contracts refuses the bundle. Native Cadence has no app-storage
+execution runtime and refuses the `app-storage: [1]` requirement; hosted v2
+admits the `works.*` names but has no Works backend, slot executor or verified
+reviewer authority yet. No install, migration execution, adoption or runtime
+acceptance is claimed here.
 
 ## Dev-only reference tools
 

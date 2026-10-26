@@ -1,0 +1,17 @@
+{
+  "contract": "app-storage/v1",
+  "app": "works",
+  "record_kind": "document",
+  "schema_version": 1,
+  "compatible_schema_versions": [1],
+  "default_table": "documents",
+  "record_search_columns": ["title", "tags"],
+  "record_write_schema": false,
+  "migrations": [
+    {
+      "version": 1,
+      "path": "storage/001-documents.json",
+      "sha256": "sha256:fa0a33ab023e301a9fc0057faecc45802db251689d244de90f2363639e91483d"
+    }
+  ]
+}

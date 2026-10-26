@@ -1,18 +1,18 @@
-> Status: the installed bundle stores content through the Cadence host. The
-> actor/on-behalf-of fields below are the host-owned revision model; they are
-> never child-supplied. The reference host is development evidence.
+> Status: the installed bundle owns its logical content schema through
+> `app/app-storage.json` and `app/storage/001-documents.json`; the host executes
+> it. The actor/on-behalf-of, revision, review and export fields below are host
+> authority: they are never child-supplied and never app columns. The reference
+> host is development evidence.
 
-# Content model (proposed)
+# Content model
 
-Status: design input for WRK-1. WRK-2 implements only a fixture-backed read
-subset in `src/content/`: summaries, list/search/kind filter, get, defensive
-copies and computed review/export state. WRK-3 adds the transport-agnostic host
-contract v0 and its reference host (`docs/host-contract.md`,
-`src/contract/host.mjs`). WRK-4 exposes it on localhost with JSON persistence and
-a content CLI (`src/host/server.mjs`, `scripts/works.mjs`). Cadence host
-implementation, write UI, the full query grammar and agent/CLI tools remain
-follow-ups. Names are illustrative until a
-verified Cadence host contract exists.
+Status: WRK-1 to WRK-5 established the design and the reference host. WRK-6
+made `app/` the installable bundle and WRK-10 gave that bundle its app-owned
+logical storage schema (`app/app-storage.json`, `app/storage/001-documents.json`)
+with the installed content grammar documented below. The hosted v2 runtime does
+not yet execute the Works domain operations or host authority; the reference
+host and fixtures remain development evidence, not production. Names are
+illustrative until a verified runtime host contract exists.
 
 ## Kinds
 
@@ -24,6 +24,82 @@ verified Cadence host contract exists.
 
 All content has a stable id, kind, title, workspace, owner, created/updated
 timestamps, tags, optional collection and audit history.
+
+## Installed content grammar and app-owned storage (WRK-10)
+
+The installed screen and the native host support three kinds only — `doc`,
+`deck` and `sheet`. `collection`, `tag`/`link` records and the table/image block
+shapes above are not part of the installed content grammar.
+
+The content object is closed and kind-specific:
+
+- `doc` — `blocks`: a non-empty array of `{type, text}` with `type` one of
+  `h2`, `p`, `callout`, and an optional non-empty `label` on `callout`.
+- `deck` — `slides`: a non-empty array of `{title, body, notes?}`.
+- `sheet` — non-empty string `columns`, and `rows` arrays whose length matches
+  the columns; cells are strings or numbers.
+
+The host validates the object before a write, including the 65536-byte content
+bound, title (240 bytes, trimmed, non-empty), at most 20 tags of at most 60
+bytes, and unknown kinds/fields/blocks. This is the canonical grammar in
+`src/store/app_works.rs`; the app does not redefine it.
+
+`app/app-storage.json` declares `app-storage/v1` at `schema_version` 1 with one
+ordered migration, `app/storage/001-documents.json`; the descriptor holds that
+file's raw-byte `sha256`. `needs.requires.contracts` includes
+`app-storage: [1]`. One logical table carries the material the screen reads and
+writes:
+
+| Column | Type | Bound |
+|---|---|---|
+| `kind` | text, not null | `doc`, `deck` or `sheet` |
+| `title` | text, not null | 240 characters |
+| `tags` | json, not null, default `[]` | at most 20 unique non-empty strings of at most 60 characters |
+| `blocks` | json, nullable | doc only |
+| `slides` | json, nullable | deck only |
+| `columns` | json, nullable | sheet only |
+| `rows` | json, nullable | sheet only |
+
+The host allocates `id`, `context_id`, `revision`, `created_at` and
+`updated_at`; the package does not declare them. Exactly the kind's payload
+columns are non-null. `documents_kind` is a non-unique index on `kind`, and
+`record_bytes` is the host ceiling (262144) because the native grammar already
+bounds a kind payload to 65536 bytes while JSON escaping can grow the stored
+row.
+
+The payload columns intentionally carry no `json_schema`: the host's bounded
+JSON Schema value limits (256 array items, 4096 nodes) are narrower than the
+native Works grammar, so a deck or sheet the native host accepted must not be
+rejected at adoption. `record_kind` is `document` and `default_table` is
+`documents`. `record_write_schema` is `false` and `record_search_columns` is
+`["title", "tags"]`: the generic record bridge cannot write Works content, and
+the nine `works.*` host operations are the only write path.
+
+### Adoption and material change
+
+Existing native Works ids, revisions, authors, audit rows, idempotency records
+and review/export references survive adoption:
+
+- `documents.id`, `context_id`, `revision`, `created_at` and `updated_at` keep
+  the native item values; `kind`, `title`, `tags` and the current revision's
+  payload map onto the columns above.
+- Each native immutable revision keeps its revision number, author, timestamp,
+  kind, title and content snapshot in a host-owned history table. The content
+  digest is recomputed from the same canonical `{kind,title,content}` value
+  (tags excluded) and must equal the stored native digest; a mismatch refuses
+  adoption instead of silently rewriting a review or export reference. The
+  separate idempotency payload digest covers `{kind,title,content,tags}`.
+- `owner`, `reviewed_revision`, `review_status`, `pending_revision` and
+  `trashed` remain host authority and never become `documents` columns.
+- An approved current revision stays approved after adoption only while its
+  material digest is unchanged. A package migration that changes material
+  (`add_column` or `backfill`; anything except `create_index`) makes the host
+  recompute every document digest. A changed digest clears the approval
+  (`review_status = none`, `reviewed_revision = 0`, `pending_revision = null`),
+  appends an audit row, and leaves older export receipts stale. Export then
+  refuses with `needs_review` until a distinct reviewer approves the current
+  revision. A migration never creates a Works revision and never approves
+  content.
 
 ## Revisions
 
