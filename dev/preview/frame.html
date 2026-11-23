@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Works Screen Frame</title>
+    <link rel="stylesheet" href="/app/screens/works/works.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        color: var(--color-ink-100);
+        font-family: var(--font-sans);
+      }
+      body {
+        padding: 20px 24px 36px;
+      }
+      @media (max-width: 600px) {
+        body {
+          padding: 14px 14px 28px;
+        }
+      }
+      #root {
+        min-width: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script id="cadence-screen-boot" type="application/json">{}</script>
+    <div id="root"></div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var theme = params.get("theme") === "light" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        var nonce = params.get("nonce") || "";
+        var gen = Number(params.get("gen") || "1");
+        var parentOrigin = params.get("origin") || window.location.origin;
+        if (!/^[0-9a-f]{64}$/.test(nonce)) {
+          nonce = "0".repeat(64);
+        }
+        document.getElementById("cadence-screen-boot").textContent = JSON.stringify({
+          bridge_nonce: nonce,
+          generation: Number.isSafeInteger(gen) && gen >= 0 ? gen : 1,
+          parent_origin: parentOrigin,
+          tag: "works",
+        });
+        window.addEventListener("message", function (ev) {
+          if (ev.origin !== parentOrigin) return;
+          if (ev.data && ev.data.type === "preview-theme") {
+            document.documentElement.setAttribute(
+              "data-theme",
+              ev.data.theme === "light" ? "light" : "dark",
+            );
+          }
+        });
+      })();
+    </script>
+    <script src="/app/screens/works/runtime.js"></script>
+    <script src="/app/screens/works/client.js"></script>
+  </body>
+</html>

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Works · Synthetic Host Preview</title>
+    <style>
+      :root {
+        --pv-bg: #0b0b0c;
+        --pv-surface: #141518;
+        --pv-surface-2: #191a1e;
+        --pv-border: #2e3136;
+        --pv-text: #f6f7f8;
+        --pv-muted: #9ba1a9;
+        --pv-accent: #2dd4bf;
+        --pv-on-accent: #04201c;
+        --pv-warn: #fbbf24;
+      }
+      :root[data-theme="light"] {
+        --pv-bg: #f3f5f6;
+        --pv-surface: #ffffff;
+        --pv-surface-2: #edf0f2;
+        --pv-border: #cdd4d8;
+        --pv-text: #20292d;
+        --pv-muted: #536168;
+        --pv-accent: #126b60;
+        --pv-on-accent: #ffffff;
+        --pv-warn: #b45309;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--pv-bg);
+        color: var(--pv-text);
+        font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+      }
+      .pv-shell {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      .pv-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 10px 18px;
+        background: var(--pv-surface);
+        border-bottom: 1px solid var(--pv-border);
+      }
+      .pv-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .pv-title {
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: -0.01em;
+      }
+      .pv-badge {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--pv-border);
+        background: var(--pv-surface-2);
+        color: var(--pv-warn);
+      }
+      .pv-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .pv-btn,
+      .pv-select {
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 5px;
+        border: 1px solid var(--pv-border);
+        background: var(--pv-surface-2);
+        color: var(--pv-text);
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .pv-btn[aria-pressed="true"] {
+        background: var(--pv-accent);
+        border-color: var(--pv-accent);
+        color: var(--pv-on-accent);
+        font-weight: 600;
+      }
+      .pv-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 0 18px;
+        background: var(--pv-surface);
+        border-bottom: 1px solid var(--pv-border);
+      }
+      .pv-tabs {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        overflow-x: auto;
+      }
+      .pv-tab {
+        padding: 10px 12px;
+        background: transparent;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        color: var(--pv-muted);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .pv-tab[aria-selected="true"] {
+        color: var(--pv-accent);
+        border-bottom-color: var(--pv-accent);
+      }
+      .pv-meta {
+        font-size: 12px;
+        color: var(--pv-muted);
+        font-family: ui-monospace, SFMono-Regular, monospace;
+      }
+      .pv-stage {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        padding: 16px;
+        min-height: 0;
+      }
+      .pv-frame-wrap {
+        width: 100%;
+        max-width: 1360px;
+        background: var(--pv-surface);
+        border: 1px solid var(--pv-border);
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100vh - 130px);
+      }
+      .pv-frame-wrap.is-canvas {
+        max-width: 720px;
+      }
+      #works-frame {
+        width: 100%;
+        flex: 1;
+        min-height: 760px;
+        border: 0;
+        display: block;
+      }
+      .pv-dialog {
+        position: fixed;
+        inset: auto 16px 16px auto;
+        z-index: 10;
+        width: min(360px, calc(100vw - 32px));
+        padding: 16px;
+        border: 1px solid var(--pv-border);
+        border-radius: 8px;
+        background: var(--pv-surface);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+        display: grid;
+        gap: 10px;
+      }
+      .pv-dialog[hidden] {
+        display: none;
+      }
+      .pv-dialog .pv-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      @media (max-width: 600px) {
+        .pv-stage {
+          padding: 8px;
+        }
+        .pv-topbar,
+        .pv-nav {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pv-shell">
+      <header class="pv-topbar">
+        <div class="pv-brand">
+          <span class="pv-title">Works</span>
+          <span class="pv-badge">SYNTHETIC FIXTURES · MessageChannel Screen Preview</span>
+        </div>
+        <div class="pv-controls">
+          <button id="btn-surface" class="pv-btn" type="button" aria-pressed="false">
+            Surface: Full App
+          </button>
+          <select id="sel-view" class="pv-select" aria-label="View Preset">
+            <option value="default">View: Default</option>
+            <option value="card">View: Chat card (p.id)</option>
+          </select>
+          <select id="sel-reads" class="pv-select" aria-label="Canvas reads">
+            <option value="admitted">Canvas reads: admitted</option>
+            <option value="refused">Canvas reads: refused (current host)</option>
+          </select>
+          <button id="btn-elsewhere" class="pv-btn" type="button">Edit elsewhere</button>
+          <button id="btn-theme" class="pv-btn" type="button" aria-pressed="false">Theme: Dark</button>
+          <button id="btn-locale" class="pv-btn" type="button" aria-pressed="false">Locale: EN</button>
+          <button id="btn-reset" class="pv-btn" type="button">Reset data</button>
+        </div>
+      </header>
+      <nav class="pv-nav" aria-label="App sections">
+        <div id="pv-tabs" class="pv-tabs"></div>
+        <span id="pv-status" class="pv-meta">Handshaking…</span>
+      </nav>
+      <div id="pv-dialog" class="pv-dialog" role="dialog" aria-modal="true" hidden></div>
+      <main class="pv-stage">
+        <div id="pv-frame-wrap" class="pv-frame-wrap">
+          <iframe
+            id="works-frame"
+            title="Works Sandboxed Screen"
+            sandbox="allow-scripts allow-same-origin allow-forms"
+          ></iframe>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/dev/preview/host.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,119 @@
+{
+  "contract": "app-chat/v1",
+  "app": "works",
+  "contexts": [
+    {
+      "id": "all",
+      "label": "Works",
+      "prompts": [
+        "List my docs, decks and sheets waiting for review",
+        "Which items changed since they were last approved?",
+        "Which approved items are ready to export?"
+      ],
+      "record": {
+        "label": "Item",
+        "prompts": [
+          "Summarize this item",
+          "What changed in the latest revision?",
+          "Is this item ready for review or export?"
+        ],
+        "i18n": {
+          "zh-TW": {
+            "label": "項目",
+            "prompts": ["摘要這個項目", "最新版本有哪些變更？", "這個項目可以送審或匯出嗎？"]
+          }
+        }
+      },
+      "i18n": {
+        "zh-TW": {
+          "label": "文件工作台",
+          "prompts": ["列出等待審閱的文件、簡報和試算表", "哪些項目在上次核准後又有變更？", "哪些已核准的項目可以匯出？"]
+        }
+      }
+    },
+    {
+      "id": "docs",
+      "label": "Docs",
+      "prompts": [
+        "List my docs and what each one covers",
+        "Which docs still need a review request?"
+      ],
+      "record": {
+        "label": "Doc",
+        "prompts": [
+          "Outline this doc",
+          "Tighten the wording of this doc",
+          "Point out anything unclear or missing in this doc"
+        ],
+        "i18n": {
+          "zh-TW": {
+            "label": "文件",
+            "prompts": ["為這份文件列出大綱", "精簡這份文件的措辭", "指出這份文件中不清楚或缺漏的地方"]
+          }
+        }
+      },
+      "i18n": {
+        "zh-TW": {
+          "label": "文件",
+          "prompts": ["列出我的文件及各自的內容", "哪些文件還沒有要求審閱？"]
+        }
+      }
+    },
+    {
+      "id": "sheets",
+      "label": "Sheets",
+      "prompts": [
+        "List my sheets and their columns",
+        "Which sheets changed since they were last approved?"
+      ],
+      "record": {
+        "label": "Sheet",
+        "prompts": [
+          "Summarize the columns and rows in this sheet",
+          "Check this sheet for blank or inconsistent cells",
+          "Total the numeric columns in this sheet"
+        ],
+        "i18n": {
+          "zh-TW": {
+            "label": "試算表",
+            "prompts": ["摘要這份試算表的欄位與資料", "檢查這份試算表是否有空白或不一致的儲存格", "加總這份試算表的數值欄位"]
+          }
+        }
+      },
+      "i18n": {
+        "zh-TW": {
+          "label": "試算表",
+          "prompts": ["列出我的試算表及其欄位", "哪些試算表在上次核准後又有變更？"]
+        }
+      }
+    },
+    {
+      "id": "decks",
+      "label": "Decks",
+      "prompts": [
+        "List my decks and how many slides each has",
+        "Which decks are waiting for review?"
+      ],
+      "record": {
+        "label": "Deck",
+        "prompts": [
+          "Summarize the storyline of this deck",
+          "Suggest tighter titles for these slides",
+          "Draft speaker notes for slides that have none"
+        ],
+        "i18n": {
+          "zh-TW": {
+            "label": "簡報",
+            "prompts": ["摘要這份簡報的故事線", "為這些投影片建議更精簡的標題", "為沒有備註的投影片草擬講者備註"]
+          }
+        }
+      },
+      "i18n": {
+        "zh-TW": {
+          "label": "簡報",
+          "prompts": ["列出我的簡報及各自的投影片數目", "哪些簡報正在等待審閱？"]
+        }
+      }
+    }
+  ]
+}
