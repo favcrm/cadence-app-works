@@ -263,3 +263,16 @@ body {
     max-width: none;
   }
 }
+
+.works-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.works-fieldset:disabled {
+  opacity: 0.6;
+}

@@ -55,6 +55,7 @@ export function DetailView(props: DetailProps) {
   const [stale, setStale] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [confirmTrash, setConfirmTrash] = useState(false);
+  const [confirmReload, setConfirmReload] = useState(false);
   const [trashError, setTrashError] = useState<string | null>(null);
   const version = useRef(0);
   const owner = useRef(Symbol("works-detail"));
@@ -157,6 +158,9 @@ export function DetailView(props: DetailProps) {
       setNotice({ tone: "ok", text: t("notice.saved", { n: next.revision }) });
     });
 
+  // Reload replaces the draft with the host copy, so a dirty draft needs an explicit yes.
+  const requestReload = () => (dirty ? setConfirmReload(true) : void load());
+
   const review = item.reviewStatus === "pending" ? (
     t("detail.review_pending", { n: item.revision })
   ) : item.reviewStatus === "changes_requested" ? (
@@ -198,7 +202,7 @@ export function DetailView(props: DetailProps) {
       {stale ? (
         <Notice state="stale">
           <strong>{t("stale.title")}</strong> {t("stale.body")}{" "}
-          <Button size="sm" variant="primary" disabled={locked} onClick={() => void load()}>
+          <Button size="sm" variant="primary" disabled={locked} onClick={requestReload}>
             {t("action.reload")}
           </Button>
         </Notice>
@@ -231,7 +235,7 @@ export function DetailView(props: DetailProps) {
             >
               {t("action.save")}
             </Button>
-            <Button size="sm" disabled={locked} onClick={() => void load()}>
+            <Button size="sm" disabled={locked} onClick={requestReload}>
               {t("action.reload")}
             </Button>
             {props.canRequestReview ? (
@@ -308,13 +312,13 @@ export function DetailView(props: DetailProps) {
             void save();
           }}
         >
+          <fieldset className="works-fieldset" disabled={stale}>
           <Field label={t("field.title")}>
             {(control) => (
               <input
                 {...control}
                 className="field"
                 value={title}
-                disabled={stale}
                 onChange={(e) => {
                   setTitle(e.target.value);
                   version.current += 1;
@@ -327,10 +331,26 @@ export function DetailView(props: DetailProps) {
             numeric={numeric.current}
             onChange={(next) => { setContent(next); version.current += 1; }}
           />
+          </fieldset>
         </form>
       ) : (
         <ContentView content={content} />
       )}
+
+      {confirmReload ? (
+        <ConfirmDialog
+          title={t("reload.title")}
+          body={t("reload.body")}
+          confirmLabel={t("action.discard_reload")}
+          pending={false}
+          error={null}
+          onCancel={() => setConfirmReload(false)}
+          onConfirm={() => {
+            setConfirmReload(false);
+            void load();
+          }}
+        />
+      ) : null}
 
       {confirmTrash ? (
         <ConfirmDialog

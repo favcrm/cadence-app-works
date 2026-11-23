@@ -29,6 +29,7 @@ export const messages = {
   "action.review": { en: "Review", "zh-TW": "審閱" },
   "action.export": { en: "Export", "zh-TW": "匯出" },
   "action.trash": { en: "Move to trash", "zh-TW": "移至垃圾桶" },
+  "action.discard_reload": { en: "Discard edits and reload", "zh-TW": "捨棄編輯並重新載入" },
   "action.restore": { en: "Restore", "zh-TW": "還原" },
 
   "list.loading": { en: "Loading Works…", "zh-TW": "正在載入…" },
@@ -106,6 +107,12 @@ export const messages = {
   "stale.body": {
     en: "Your edits were not saved and nothing was overwritten. Reload to see the latest revision.",
     "zh-TW": "你的編輯未儲存，也沒有覆寫任何內容。請重新載入以查看最新版本。",
+  },
+
+  "reload.title": { en: "Discard your edits?", "zh-TW": "要捨棄你的編輯嗎？" },
+  "reload.body": {
+    en: "Reloading replaces your unsaved edits with the latest saved revision.",
+    "zh-TW": "重新載入會以最新已儲存的版本取代你尚未儲存的編輯。",
   },
 
   "trash.title": { en: "Move to trash?", "zh-TW": "移至垃圾桶？" },

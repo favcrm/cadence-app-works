@@ -117,11 +117,17 @@ const forbiddenInBundle = [
 // The built client bundles the vendored app-kit, whose parent-origin guard
 // accepts a `*.localhost` host. That one validator expression is the only
 // permitted `localhost`; any other occurrence in shipped bytes still fails.
-const appKitHostGuard = /\.at\(-1\)===`localhost`/g;
+const appKitHostGuard = /\.at\(-1\)===`localhost`/;
 for (const relative of bundleFiles) {
   if (!/\.(md|json|js|css|svg)$/.test(relative)) continue;
   let text = readFileSync(join(root, relative), "utf8");
-  if (relative === "app/screens/works/client.js") text = text.replace(appKitHostGuard, "");
+  if (relative === "app/screens/works/client.js") {
+    const hits = text.match(/localhost/g) ?? [];
+    if (hits.length !== 1 || !appKitHostGuard.test(text)) {
+      fail(`${relative} must contain exactly one localhost, the app-kit host guard`);
+    }
+    text = text.replace(appKitHostGuard, "");
+  }
   for (const pattern of forbiddenInBundle) {
     if (pattern.test(text)) fail(`${relative} contains forbidden ${pattern}`);
   }

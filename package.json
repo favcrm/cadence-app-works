@@ -10,7 +10,7 @@
     "host": "node src/host/server.mjs",
     "works": "node scripts/works.mjs",
     "preview": "node scripts/dev-preview.mjs",
-    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "node scripts/build_screen.mjs",
     "verify": "node scripts/verify_screen.mjs",
     "test": "node --test --test-force-exit tests/*.test.mjs",

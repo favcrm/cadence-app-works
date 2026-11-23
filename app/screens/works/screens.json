@@ -16,18 +16,18 @@
     {
       "name": "client.js",
       "media_type": "text/javascript",
-      "size": 100505,
-      "sha256": "sha256:3fd8879b534ae3b56214ba59cc8ccc2f744a81824a6afc8fb97353e85934a4f0"
+      "size": 101117,
+      "sha256": "sha256:dfd7a930c7c4ff832d035d391777f614d2660122fff42fe7e8aeb3537f4184f2"
     },
     {
       "name": "works.css",
       "media_type": "text/css",
-      "size": 25990,
-      "sha256": "sha256:3b2e41ae824db5d6498fe58dd9b8f1cb6b83770e83a67d58389abf546ef3cd28"
+      "size": 26104,
+      "sha256": "sha256:cf02985ab739eb97c239c5734b5f02b7b1d8ceaa7dd713946c5499dad366e0e9"
     }
   ],
   "provenance": {
-    "source_digest": "sha256:56166ed548eabcdf87d659f0ac4a30de1ef0ad0b42aea7433663833274394539",
+    "source_digest": "sha256:7719766276b33ce96894ddb4eac8e9c927e184bf904bd4f28868b5e03298f10a",
     "sdk_digest": "sha256:fd65c974511e63b3996e9fa7e438fb4e39df5f508d11636116ef150fcc123e35",
     "toolchain_digest": "sha256:e21cfc8222db408abe6ba5a482520639d9cf4b96481c19aff4b4246af8a65e42"
   },

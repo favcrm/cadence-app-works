@@ -57,3 +57,10 @@ test("edits save through works.patch at the loaded revision", () => {
   const detail = read(join(root, "src/screen/features/works/DetailView.tsx"));
   assert.match(detail, /failure\.kind === "stale"[\s\S]{0,200}setStale\(true\)/);
 });
+
+test("reload confirms before dropping edits and a stale editor is read-only", () => {
+  const detail = read(join(root, "src/screen/features/works/DetailView.tsx"));
+  assert.match(detail, /dirty \? setConfirmReload\(true\)/);
+  assert.equal((detail.match(/onClick=\{requestReload\}/g) ?? []).length, 2);
+  assert.match(detail, /<fieldset className="works-fieldset" disabled=\{stale\}>/);
+});
