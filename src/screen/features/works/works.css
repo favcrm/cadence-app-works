@@ -31,8 +31,20 @@ body {
   background: transparent;
 }
 
+.works-list {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.works-toolbar > * {
+  min-width: 0;
+}
+
 .works-search {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   flex: 1 1 220px;
   min-width: 0;
@@ -40,7 +52,7 @@ body {
 }
 
 .works-search .field {
-  flex: 1;
+  flex: 1 1 8rem;
   min-width: 0;
 }
 
