@@ -1,7 +1,7 @@
 ---
 app: works
 title: Works
-version: '0.2.2'
+version: '0.2.3'
 summary: 'Docs, decks and sheets with review and export gates. Create, edit and review on the host; export receipts only for approved revisions.'
 needs:
   connections: []
@@ -12,6 +12,7 @@ needs:
     contracts:
       app-screens: [1]
       screen-records: [1]
+      screen-startup: [1]
       app-views: [1]
 listing:
   tagline: Docs, decks and sheets with review and export gates
