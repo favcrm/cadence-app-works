@@ -10,12 +10,112 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Verify committed SDK archive and extract closed package
+        id: sdk
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, re, stat, tarfile
+          from pathlib import Path
+
+          def unique_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError("Duplicate JSON field")
+                  result[key] = value
+              return result
+
+          def read_json(path):
+              return json.loads(Path(path).read_text(), object_pairs_hook=unique_object)
+
+          def canonical(name):
+              return (isinstance(name, str) and bool(name) and "\\" not in name
+                      and all(part not in ("", ".", "..") for part in name.split("/")))
+
+          pin = read_json("screen-ui.lock.json")
+          source = pin["source"]
+          if source["kind"] != "commit" or not re.fullmatch(r"[0-9a-f]{40}", source.get("sourceSha") or ""):
+              raise ValueError("Release requires committed SDK provenance; development/null refused")
+          package = read_json("package.json")
+          node = pin["toolchain"]["node"]
+          if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", node):
+              raise ValueError("Exact Node version required")
+          archive = pin["archive"]
+          if not re.fullmatch(r"cadence-screen-ui-[0-9]+\.[0-9]+\.[0-9]+\.tgz", archive["filename"]):
+              raise ValueError("Invalid SDK archive filename")
+          sdk = Path(".cadence-ui")
+          path = sdk / archive["filename"]
+          if sdk.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
+              raise ValueError("SDK archive must be a regular local file")
+          if package["dependencies"]["@cadence/screen-ui"] != "file:" + path.as_posix():
+              raise ValueError("SDK dependency/archive mismatch")
+          data = path.read_bytes()
+          if len(data) != archive["bytes"] or hashlib.sha256(data).hexdigest() != archive["sha256"]:
+              raise ValueError("SDK archive integrity mismatch")
+          expected = set()
+          for item in pin["artifacts"]:
+              name = item["path"]
+              if not canonical(name) or "package/" + name in expected:
+                  raise ValueError("Invalid/duplicate declared SDK member")
+              expected.add("package/" + name)
+          if not expected or os.path.lexists(sdk / "package"):
+              raise ValueError("SDK extraction requires declared members and an empty destination")
+          with tarfile.open(path, "r:gz") as tf:
+              members = tf.getmembers()
+              seen, regular, total = set(), set(), 0
+              for member in members:
+                  name = member.name.rstrip("/")
+                  if not canonical(name) or name.split("/")[0] != "package" or name in seen:
+                      raise ValueError("Invalid/duplicate SDK archive path")
+                  seen.add(name)
+                  if member.isdir():
+                      if member.name not in (name, name + "/") or not any(p.startswith(name + "/") for p in expected):
+                          raise ValueError("Undeclared SDK directory")
+                  elif member.isreg() and member.name == name and name in expected and member.size <= 2097152:
+                      regular.add(name)
+                      total += member.size
+                  else:
+                      raise ValueError("SDK payload must contain only declared regular files; links refused")
+              if regular != expected or total > 4194304:
+                  raise ValueError("Missing/oversized SDK archive members")
+              for member in members:
+                  if member.isreg():
+                      target = sdk / member.name
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      with target.open("xb") as output, tf.extractfile(member) as payload:
+                          output.write(payload.read())
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"node={node}\n")
+          PY
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
-          node-version: "22"
+          run_install: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ steps.sdk.outputs.node }}
+
+      - name: Install locked screen dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Check scaffold and sources
         run: node scripts/check-scaffold.mjs
-      - name: Test content, contract, reference host and CLI
-        run: node --test --test-force-exit tests/*.test.mjs
+
+      - name: Screen typecheck
+        run: pnpm typecheck
+
+      - name: Build screen bundle
+        run: pnpm build
+
+      - name: Verify the committed bundle matches the rebuild
+        run: |
+          pnpm verify
+          git diff --exit-code -- app/screens/works
+
+      - name: Test content, contract, reference host, CLI and screen
+        run: pnpm test

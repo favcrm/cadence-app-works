@@ -12,6 +12,7 @@ needs:
     contracts:
       app-screens: [1]
       screen-records: [1]
+      screen-startup: [1]
       app-views: [1]
       app-storage: [1]
 listing:

@@ -1,0 +1,290 @@
+/* Works screen styles layered over @cadence/screen-ui tokens. The document,
+   page wrapper and toolbars stay transparent: the host board paints the
+   backdrop, and only discrete cards use surface tokens. */
+
+html,
+body {
+  background: transparent;
+}
+
+.app-outlet.works {
+  padding: 0;
+  background: transparent;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.works-heading,
+.works-title {
+  margin: 0;
+  color: var(--color-ink-100);
+}
+
+.works-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  background: transparent;
+}
+
+.works-list {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.works-toolbar > * {
+  min-width: 0;
+}
+
+.works-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 420px;
+}
+
+.works-search .field {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.works-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.works-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 1.375rem;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-ink-700);
+  color: var(--color-ink-300);
+  font-size: var(--text-micro);
+  white-space: nowrap;
+}
+
+.works-chip[data-tone="ok"] {
+  border-color: var(--color-ok);
+  color: var(--color-ok);
+}
+
+.works-chip[data-tone="warn"] {
+  border-color: var(--color-warn);
+  color: var(--color-warn);
+}
+
+.works-rev,
+.works-muted {
+  color: var(--color-ink-400);
+  font-size: var(--text-secondary);
+  margin: 0;
+}
+
+.works-open {
+  text-align: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.works-detail {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.works-detail-head {
+  display: grid;
+  gap: 6px;
+}
+
+.works-titlebar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.works-form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.works-new {
+  max-width: 760px;
+}
+
+.works-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.works-edit-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 0.5rem;
+  background: var(--color-ink-850);
+}
+
+:root[data-theme="light"] .works-edit-card {
+  background: var(--color-ink-800);
+}
+
+.works-edit-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.works-row-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.works-textarea {
+  height: auto;
+  padding-block: 0.5rem;
+  line-height: 1.5;
+  resize: vertical;
+  width: 100%;
+}
+
+.works-sheet-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.works-sheet-edit .field {
+  min-width: 7.5rem;
+  width: 100%;
+}
+
+/* Renderers */
+.works-doc {
+  display: grid;
+  gap: 12px;
+  max-width: 46rem;
+  color: var(--color-ink-200);
+}
+
+.works-doc-heading {
+  margin: 8px 0 0;
+  font-size: 1.1rem;
+  color: var(--color-ink-100);
+}
+
+.works-doc-p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.works-callout {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-inline-start: 3px solid var(--color-accent);
+  border-radius: 0.25rem;
+  background: var(--color-ink-850);
+}
+
+:root[data-theme="light"] .works-callout {
+  background: var(--color-ink-800);
+}
+
+.works-callout p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.works-callout-label {
+  color: var(--color-ink-100);
+  font-size: var(--text-label);
+}
+
+.works-deck {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: 14px;
+}
+
+.works-slide {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 9rem;
+  padding: 16px;
+  border-radius: 0.5rem;
+  background: var(--color-ink-850);
+  color: var(--color-ink-200);
+}
+
+:root[data-theme="light"] .works-slide {
+  background: var(--color-ink-800);
+}
+
+.works-slide-no {
+  color: var(--color-ink-500);
+  font-size: var(--text-micro);
+}
+
+.works-slide-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--color-ink-100);
+  overflow-wrap: anywhere;
+}
+
+.works-slide-body,
+.works-slide-notes {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.works-slide-notes {
+  color: var(--color-ink-400);
+  font-size: var(--text-secondary);
+}
+
+.works-canvas .works-toolbar {
+  gap: 8px;
+}
+
+@container (max-width: 30rem) {
+  .works-search {
+    max-width: none;
+  }
+}
+
+.works-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.works-fieldset:disabled {
+  opacity: 0.6;
+}

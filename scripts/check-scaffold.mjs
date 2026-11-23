@@ -34,8 +34,10 @@ const requiredBundle = [
   "app/workflows/document-draft.md",
   "app/views/app-views-v1.json",
   "app/screens/works/screens.json",
+  "app/screens/works/runtime.js",
   "app/screens/works/client.js",
-  "app/screens/works/app.css",
+  "app/screens/works/works.css",
+  "app/app-chat.json",
   "app/assets/works.svg",
   "app/app-storage.json",
   "app/storage/001-documents.json",
@@ -55,6 +57,7 @@ if (!/^version:\s*'\d+\.\d+\.\d+'\s*$/m.test(fields)) fail("app/app.md version i
 for (const requirement of [
   "app-screens: [1]",
   "screen-records: [1]",
+  "screen-startup: [1]",
   "app-views: [1]",
   "app-storage: [1]",
 ]) {
@@ -127,9 +130,20 @@ const forbiddenInBundle = [
   /\bactor\b/i,
   /src\/host|dev\/write|works-write/,
 ];
+// The built client bundles the vendored app-kit, whose parent-origin guard
+// accepts a `*.localhost` host. That one validator expression is the only
+// permitted `localhost`; any other occurrence in shipped bytes still fails.
+const appKitHostGuard = /\.at\(-1\)===`localhost`/;
 for (const relative of bundleFiles) {
   if (!/\.(md|json|js|css|svg)$/.test(relative)) continue;
-  const text = readFileSync(join(root, relative), "utf8");
+  let text = readFileSync(join(root, relative), "utf8");
+  if (relative === "app/screens/works/client.js") {
+    const hits = text.match(/localhost/g) ?? [];
+    if (hits.length !== 1 || !appKitHostGuard.test(text)) {
+      fail(`${relative} must contain exactly one localhost, the app-kit host guard`);
+    }
+    text = text.replace(appKitHostGuard, "");
+  }
   for (const pattern of forbiddenInBundle) {
     if (pattern.test(text)) fail(`${relative} contains forbidden ${pattern}`);
   }

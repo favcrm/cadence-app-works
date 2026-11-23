@@ -172,3 +172,23 @@ Tag `vX.Y.Z`, or run the `publish` workflow manually, and the workflow:
 
 `DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json APP_INSTALL_CHECK_JSON=/tmp/app-install-check.json node .github/scripts/publish.mjs` prints the entry and artifact hash
 without writing; the install-check report is required even for a dry run. The gate is the target host, not only the offline bundle check.
+
+## Screen build and verify
+
+The installed screen in `app/screens/works/` is built from `src/screen/` on the
+pinned `@cadence/app-kit` (vendored in `app-kit/`) and `@cadence/screen-ui`
+(`.cadence-ui/cadence-screen-ui-1.0.0.tgz`, recorded in `screen-ui.lock.json`).
+
+```bash
+# once per clone: unpack the pinned SDK archive (CI does this with a strict check)
+mkdir .cadence-ui/package && tar -xzf .cadence-ui/cadence-screen-ui-1.0.0.tgz -C .cadence-ui
+pnpm install --frozen-lockfile
+pnpm typecheck && pnpm build && pnpm verify && pnpm test
+```
+
+`.cadence-ui/package` is ignored by git. Rebuild and commit `app/screens/works/`
+whenever `src/screen/`, `scripts/*.mjs`, `app/app.md`, `package.json`, the
+lockfiles or `app-kit/` change; `pnpm verify` compares the declared sha256 and
+source digest. The build needs the exact Node version in `screen-ui.lock.json`.
+`pnpm preview` serves a synthetic host on port 3188 (use a browser that allows
+`localhost`).
