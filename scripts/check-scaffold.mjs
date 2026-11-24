@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 import { dirname, join, relative as relativePath, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { validateAppStoragePackage, validateWorksStorage } from "./app-storage.mjs";
+
 // Offline package validation for the installable `works` bundle, plus syntax
 // checks for the dev-only reference tools. This does not replace
 // `cadence app check app`, which is the host's authoritative validator.
@@ -37,6 +39,8 @@ const requiredBundle = [
   "app/screens/works/works.css",
   "app/app-chat.json",
   "app/assets/works.svg",
+  "app/app-storage.json",
+  "app/storage/001-documents.json",
 ];
 for (const relative of requiredBundle) {
   if (!bundleFiles.includes(relative)) fail(`bundle is missing ${relative}`);
@@ -55,6 +59,7 @@ for (const requirement of [
   "screen-records: [1]",
   "screen-startup: [1]",
   "app-views: [1]",
+  "app-storage: [1]",
 ]) {
   if (!fields.includes(requirement)) fail(`app/app.md does not require ${requirement}`);
 }
@@ -105,6 +110,17 @@ for (const asset of screens.assets) {
   const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
   if (asset.sha256 !== digest) fail(`${asset.name} sha256 does not match its bytes`);
   if (asset.size !== bytes.length) fail(`${asset.name} size does not match its bytes`);
+}
+
+// 5b. Package-owned storage: descriptor, raw-byte migration checksums and the
+//     Works content boundary. The host's app-storage validator remains the
+//     authority for keyword admission and execution.
+const storage = validateAppStoragePackage(bundle);
+if (storage.descriptor?.app !== screens.app) {
+  fail("app-storage app does not match the screen app");
+}
+for (const error of [...storage.errors, ...validateWorksStorage(storage)]) {
+  fail(`app-storage: ${error}`);
 }
 
 // 6. Shipped bytes: no localhost, reference host, fixture or actor picker.

@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "operations": [
+    {
+      "op": "create_table",
+      "table": "documents",
+      "record_bytes": 262144,
+      "columns": [
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false,
+          "enum": ["doc", "deck", "sheet"]
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false,
+          "max_length": 240
+        },
+        {
+          "name": "tags",
+          "type": "json",
+          "nullable": false,
+          "default": [],
+          "json_schema": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          }
+        },
+        {
+          "name": "blocks",
+          "type": "json",
+          "nullable": true
+        },
+        {
+          "name": "slides",
+          "type": "json",
+          "nullable": true
+        },
+        {
+          "name": "columns",
+          "type": "json",
+          "nullable": true
+        },
+        {
+          "name": "rows",
+          "type": "json",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "op": "create_index",
+      "table": "documents",
+      "name": "documents_kind",
+      "columns": ["kind"],
+      "unique": false
+    }
+  ]
+}

@@ -6,10 +6,20 @@ repository name does not change installation or data identities.
 
 ## Status
 
-WRK-6 makes `app/` an installable bundle (`0.2.0`):
+WRK-6 made `app/` an installable bundle; WRK-10 makes it `0.3.0` with an
+app-owned logical storage schema. The hosted AgenticOS board implements the
+content half of the host seam (AOS-399, on agenticos-v2 `staging`, not yet
+deployed); review and export are not served yet. See `docs/host-contract.md`.
 
-- `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]` and
-  `app-views[1]`. Declares no connections and no capabilities.
+- `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]`,
+  `app-views[1]` and `app-storage[1]`. Declares no connections and no
+  capabilities.
+- `app/app-storage.json` and `app/storage/001-documents.json`: the
+  `app-storage/v1` descriptor and its one raw-byte-checksummed migration. They
+  declare the `documents` content table (`kind`, `title`, `tags`, `blocks`,
+  `slides`, `columns`, `rows`), `record_kind: "document"`, `default_table: null`
+  and no generic record read/write bridge, and no review/export/actor columns.
+  The migration creates the table and the `documents_kind` index.
 - `app/workflows/document-draft.md`: a local text-draft workflow. It produces
   draft text for a person to paste into Works. It does not mutate Works and
   makes no content-approval claim.
@@ -22,6 +32,9 @@ WRK-6 makes `app/` an installable bundle (`0.2.0`):
 - `app/assets/works.svg`: listing icon.
 
 The host, not the app, decides who may author, review, approve or export.
+`scripts/check-scaffold.mjs` and `scripts/app-storage.mjs` prove package member
+shape, migration checksums and the content boundary offline; they do not prove
+runtime install, migration execution, adoption or review/export.
 
 ## Installable bundle
 
@@ -34,7 +47,13 @@ cadence app context create <options>                   # optional content defaul
 ```
 
 Install, approval and context are host operations gated by the operator's
-verified session. This repository does not run them.
+verified session. This repository does not run them. A host older than the
+declared contracts refuses the bundle. Native Cadence has no app-storage
+execution runtime and refuses the `app-storage: [1]` requirement; hosted v2
+serves the six content operations over the `documents` schema (AOS-399, on v2
+`staging`, not yet deployed) but has
+no review/export slot executor or verified reviewer authority yet. No install,
+adoption or hosted review/export is claimed here.
 
 ## Dev-only reference tools
 
@@ -113,7 +132,7 @@ screen. It is not an installed screen.
 ```sh
 node scripts/check-scaffold.mjs            # package validation: bundle, manifest, workflow, views, screen digests, dev-tool syntax
 node --test --test-force-exit tests/*.test.mjs
-cadence app check app                      # host validator; exit 0 on pass
+cadence app check app                      # authoritative host validator; a pre-AOS-384 native host refuses app-storage
 ```
 
 CI runs the first two. `cadence app check app` runs the host's offline
@@ -142,19 +161,25 @@ host/CLI, WRK-5 dev write surface, WRK-6 installable bundle.
 ## Publish
 
 `app.md` is the release manifest; its `listing` block is the catalogue copy.
-Tag `vX.Y.Z`, or run the `publish` workflow manually, and the workflow:
+From 0.3.0 the package declares `app-storage: [1]`, so it is a hosted-only
+release: native Cadence refuses that requirement. Push the tag `vX.Y.Z` that
+matches `app.md` (the version is bound to the tag), and the `publish` workflow:
 
-1. runs `cadence app check app` and builds the catalogue entry from the
-   manifest (no `catalogue.json`, no hand-written `upload.json`);
-2. installs the **target** Cadence release — the `cadence_version` input or the
-   `CADENCE_TARGET_VERSION` repository variable, else latest — starts a clean
-   temporary daemon, and runs `cadence app catalog install-check app`;
-3. refuses before publishing when the target host cannot install the bundle
-   (missing contract or assistant action), and otherwise publishes through
-   GitHub OIDC (or opens the fallback marketplace PR).
+1. installs the exact Cadence release named by the `cadence_version` input or
+   the `CADENCE_TARGET_VERSION` repository variable (no "latest") and runs
+   `cadence app check app` for the canonical digest and inventory, accepting
+   exit 3 only when the sole refusal is the hosted-only `app-storage`
+   (`.github/scripts/assert-app-check.py`);
+2. builds the catalogue entry from the manifest and scans every uploaded member
+   with `cadence secret scan`;
+3. delivers the exact bundle to the hosted catalogue's
+   `/public/apps/candidates` with a GitHub OIDC token. The catalogue binds this
+   repository, workflow and tag to the `works` app id, re-verifies the bytes
+   and lists that version. Listing is not installation, and an app the
+   catalogue holds `disabled` stays uninstallable.
 
-`DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json APP_INSTALL_CHECK_JSON=/tmp/app-install-check.json node .github/scripts/publish.mjs` prints the entry and artifact hash
-without writing; the install-check report is required even for a dry run. The gate is the target host, not only the offline bundle check.
+`DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json node .github/scripts/publish.mjs`
+on a matching tag ref prints the entry and artifact hash without sending.
 
 ## Screen build and verify
 
