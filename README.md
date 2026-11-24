@@ -49,9 +49,9 @@ Install, approval and context are host operations gated by the operator's
 verified session. This repository does not run them. A host older than the
 declared contracts refuses the bundle. Native Cadence has no app-storage
 execution runtime and refuses the `app-storage: [1]` requirement; hosted v2
-admits the `works.*` names but has no Works backend, slot executor or verified
-reviewer authority yet. No install, migration execution, adoption or runtime
-acceptance is claimed here.
+serves the six content operations over the `documents` schema (AOS-399) but has
+no review/export slot executor or verified reviewer authority yet. No install,
+adoption or hosted review/export is claimed here.
 
 ## Dev-only reference tools
 

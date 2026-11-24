@@ -132,8 +132,17 @@ content keeps the actor and on-behalf-of identity for the review surface.
 
 ## Managed app storage and the host seam (WRK-10)
 
-Status: the package contract and its offline validation are implemented; the
-hosted v2 runtime does not implement this seam yet. The canonical native rules
+Status: the package contract and its offline validation are implemented. The
+hosted v2 runtime implements the content half of this seam (AOS-399, merged to
+agenticos-v2 `staging`, not yet deployed): `works.query`, `works.get`,
+`works.create`, `works.patch`, `works.trash` and `works.restore` over the
+`documents` handle, with the host authority below in `tenant_works_items`,
+`tenant_works_revisions`, `tenant_works_audit` and `tenant_works_idempotency`.
+Only a board owner writes; a member's mount carries `works.query` and
+`works.get`. `works.request_review`, `works.review` and `works.export` answer
+`review_unavailable` until the host has a verified reviewer identity (see
+"Actor and scope derivation"). A package without this storage answers
+`app_storage_required`. The canonical native rules
 are `src/store/app_works.rs` and `src/daemon/app_works_rpc.rs` in the Cadence
 native repository (feature base 6bf main plus grammar commit 819). Reuse those
 rules; do not build a second Works domain engine or turn the reference host
@@ -287,8 +296,10 @@ historical operation fingerprint from the current document.
   result. A tag-only change alters only a future `create` fingerprint; it does
   not rewrite history and does not change review/export authority.
 
-CAD-1854 is extracting the canonical material string plus its sha256 prefix;
-until that lands, do not approximate either digest.
+The canonical material comes from the shared core (CAD-1854, `core-v0.2.5-17`):
+`works.draft.validate` returns `content_material` and `payload_material`, and the
+content digest is `sha256:` plus the hex SHA-256 of `content_material`. Hosts
+call the core; they do not approximate either digest.
 
 
 ### Actor and scope derivation
@@ -296,12 +307,13 @@ until that lands, do not approximate either digest.
 The native rule is the reference: a verified board human becomes
 `human:<company>:<sub>`; a native operator call without a verified human is
 `operator`, and that fallback may neither approve nor be approved. Context and
-install come from the mount proof. The hosted v2 runtime currently derives an
-actor only for the owner role on the generic record path
-(`apps/api/src/tenant-board/workspace.ts`, `callAppRecords`), and its screen
-service scope is only `{installId, contextId}`. A Works review therefore needs a
-host primitive that resolves a verified reviewer identity, not a
-client-supplied id and not an invented membership or role.
+install come from the mount proof. The hosted v2 runtime derives the Works
+writer only for the owner role (`callWorks` in
+`apps/api/src/tenant-board/workspace.ts`) and records the board subject's `sub`
+as owner and author, not the native `human:<company>:<sub>` form; adoption of
+native data must map between the two. A Works review still needs a host
+primitive that resolves a verified reviewer identity, not a client-supplied id
+and not an invented membership or role.
 
 ### Adoption
 

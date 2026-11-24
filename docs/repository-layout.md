@@ -87,8 +87,9 @@ fallback for the managed app-storage namespace.
 `screen-records[1]`, `app-views[1]` and `app-storage[1]` and ships the
 `document-draft` workflow, the nine-operation Works screen, data-only views and
 the app-owned `documents` schema. Native Cadence has no app-storage execution
-runtime and refuses the requirement; hosted v2 admits the `works.*` names but
-has no Works backend, slot executor or verified reviewer authority. The design
+runtime and refuses the requirement; hosted v2 serves the six content
+operations over the `documents` schema but has no review/export slot executor
+or verified reviewer authority yet. The design
 mockup is evidence, not an app bundle; its `tokens.css`, `kit.css` and page
 layout are not shipped app CSS.
 

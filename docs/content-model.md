@@ -9,10 +9,10 @@
 Status: WRK-1 to WRK-5 established the design and the reference host. WRK-6
 made `app/` the installable bundle and WRK-10 gave that bundle its app-owned
 logical storage schema (`app/app-storage.json`, `app/storage/001-documents.json`)
-with the installed content grammar documented below. The hosted v2 runtime does
-not yet execute the Works domain operations or host authority; the reference
-host and fixtures remain development evidence, not production. Names are
-illustrative until a verified runtime host contract exists.
+with the installed content grammar documented below. The hosted v2 runtime
+serves the six content operations over that schema (see `host-contract.md`,
+"Managed app storage and the host seam"); review and export are not served yet.
+The reference host and fixtures remain development evidence, not production.
 
 ## Kinds
 
