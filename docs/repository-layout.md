@@ -58,14 +58,15 @@ cadence-app-works/
     host-service.test.mjs  # HTTP persistence and CLI smoke
     publish.test.mjs       # version publish gate
   docs/
-    host-contract.md       # content contract and the unported Works host seam
+    host-contract.md       # content contract and the Works host seam
     content-model.md       # installed grammar, app-owned schema, adoption
     agent-contract.md      # proposed master/chat/CLI contract; tool calls deferred
     repository-layout.md
   .data/                   # ignored reference-host state (fixture data only)
   .github/workflows/ci.yml
   .github/workflows/publish.yml
-  .github/scripts/publish.mjs
+  .github/scripts/publish.mjs          # OIDC delivery to the hosted catalogue
+  .github/scripts/assert-app-check.py  # accepts only the hosted-only app-storage refusal
   package.json
 ```
 

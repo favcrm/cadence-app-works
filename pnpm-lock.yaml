@@ -136,13 +136,16 @@ importers:
         version: 19.2.7(@types/react@19.2.9)
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(vite@8.2.2)
+        version: 6.1.1(vite@8.2.2(yaml@2.8.1))
       typescript:
         specifier: 5.9.3
         version: 5.9.3
       vite:
         specifier: 8.2.2
-        version: 8.2.2
+        version: 8.2.2(yaml@2.8.1)
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
 
 packages:
 
@@ -507,6 +510,11 @@ packages:
       yaml:
         optional: true
 
+  yaml@2.8.1:
+    resolution: {integrity: sha512-lcYcMxX2PO9XMGvAJkJ3OsNMw+/7FKes7/hgerGUYWIoWu5j/+YQqcZr5JnPZWzOsEBgMbSbiSTn/dv/69Mkpw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
 snapshots:
 
   '@cadence/app-kit@file:app-kit(react@19.2.8)':
@@ -618,10 +626,10 @@ snapshots:
     dependencies:
       csstype: 3.2.4
 
-  '@vitejs/plugin-react@6.1.1(vite@8.2.2)':
+  '@vitejs/plugin-react@6.1.1(vite@8.2.2(yaml@2.8.1))':
     dependencies:
       '@rolldown/pluginutils': 1.1.1
-      vite: 8.2.2
+      vite: 8.2.2(yaml@2.8.1)
 
   csstype@3.2.4: {}
 
@@ -738,7 +746,7 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  vite@8.2.2:
+  vite@8.2.2(yaml@2.8.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -747,3 +755,6 @@ snapshots:
       tinyglobby: 0.2.17
     optionalDependencies:
       fsevents: 2.3.3
+      yaml: 2.8.1
+
+  yaml@2.8.1: {}

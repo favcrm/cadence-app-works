@@ -159,19 +159,25 @@ host/CLI, WRK-5 dev write surface, WRK-6 installable bundle.
 ## Publish
 
 `app.md` is the release manifest; its `listing` block is the catalogue copy.
-Tag `vX.Y.Z`, or run the `publish` workflow manually, and the workflow:
+From 0.3.0 the package declares `app-storage: [1]`, so it is a hosted-only
+release: native Cadence refuses that requirement. Push the tag `vX.Y.Z` that
+matches `app.md` (the version is bound to the tag), and the `publish` workflow:
 
-1. runs `cadence app check app` and builds the catalogue entry from the
-   manifest (no `catalogue.json`, no hand-written `upload.json`);
-2. installs the **target** Cadence release — the `cadence_version` input or the
-   `CADENCE_TARGET_VERSION` repository variable, else latest — starts a clean
-   temporary daemon, and runs `cadence app catalog install-check app`;
-3. refuses before publishing when the target host cannot install the bundle
-   (missing contract or assistant action), and otherwise publishes through
-   GitHub OIDC (or opens the fallback marketplace PR).
+1. installs the exact Cadence release named by the `cadence_version` input or
+   the `CADENCE_TARGET_VERSION` repository variable (no "latest") and runs
+   `cadence app check app` for the canonical digest and inventory, accepting
+   exit 3 only when the sole refusal is the hosted-only `app-storage`
+   (`.github/scripts/assert-app-check.py`);
+2. builds the catalogue entry from the manifest and scans every uploaded member
+   with `cadence secret scan`;
+3. delivers the exact bundle to the hosted catalogue's
+   `/public/apps/candidates` with a GitHub OIDC token. The catalogue binds this
+   repository, workflow and tag to the `works` app id, re-verifies the bytes
+   and lists that version. Listing is not installation, and an app the
+   catalogue holds `disabled` stays uninstallable.
 
-`DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json APP_INSTALL_CHECK_JSON=/tmp/app-install-check.json node .github/scripts/publish.mjs` prints the entry and artifact hash
-without writing; the install-check report is required even for a dry run. The gate is the target host, not only the offline bundle check.
+`DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json node .github/scripts/publish.mjs`
+on a matching tag ref prints the entry and artifact hash without sending.
 
 ## Screen build and verify
 
