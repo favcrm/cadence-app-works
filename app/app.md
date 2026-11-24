@@ -2,7 +2,7 @@
 app: works
 title: Works
 version: '0.3.0'
-summary: 'Docs, decks and sheets with review and export gates. Create, edit and review on the host; export receipts only for approved revisions.'
+summary: Create and edit revisioned docs, decks and sheets in a hosted workspace.
 needs:
   connections: []
   capabilities: {}
@@ -16,19 +16,17 @@ needs:
       app-views: [1]
       app-storage: [1]
 listing:
-  tagline: Docs, decks and sheets with review and export gates
+  tagline: Revisioned docs, decks and sheets for your workspace
   icon: assets/works.svg
   category: operations
   tags:
     - documents
-    - review
   publisher:
     name: Cadence
-  about: Works keeps docs, decks and sheets as revisioned host content. An author edits and requests review; an independent reviewer approves or requests changes; an export receipt is recorded only for the approved current revision. The screen reads and writes Works through the host. The app does not approve its own content.
+  about: Works keeps docs, decks and sheets in a hosted workspace. Board members can browse and read; board owners can create, edit, trash and restore. Review and export are not available in this release.
   can:
-    - Create, read, edit and trash docs, decks and sheets
-    - Request review of a revision and record the reviewer's decision
-    - Record an export receipt for an approved current revision
+    - Browse and read docs, decks and sheets as a board member
+    - Create, edit, trash and restore content as a board owner
   screenshots: []
   setup: []
   data:
@@ -38,15 +36,12 @@ listing:
 ---
 # Works
 
-Works is the host-owned content store for docs, decks and sheets. The screen
-at `screens/works/` reads and edits Works through the `screen-records.v1` host
-operations only. Review and export are host-confirmed decisions: the reviewer
-picks approve or changes in a host-drawn confirmation, and an export receipt is
-recorded by the host for the approved current revision.
+Works stores revisioned docs, decks and sheets in the hosted workspace. The
+screen at `screens/works/` reads and edits through the `screen-records.v1`
+host operations only. This release does not support review or export.
 
-The app does not approve its own content, choose a reviewer, or mark anything
-exported. A workflow `document-draft` produces a local text draft; it does not
-mutate Works and makes no content-approval claim.
+The `document-draft` workflow produces local draft text. It does not mutate
+Works or approve content.
 
 ## App-owned storage (0.3.0, AOS-384)
 
