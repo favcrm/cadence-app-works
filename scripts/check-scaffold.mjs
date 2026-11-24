@@ -32,7 +32,6 @@ const bundleFiles = walk(bundle).map((full) => relativePath(root, full).split(se
 const requiredBundle = [
   "app/app.md",
   "app/workflows/document-draft.md",
-  "app/views/app-views-v1.json",
   "app/screens/works/screens.json",
   "app/screens/works/runtime.js",
   "app/screens/works/client.js",
@@ -58,7 +57,6 @@ for (const requirement of [
   "app-screens: [1]",
   "screen-records: [1]",
   "screen-startup: [1]",
-  "app-views: [1]",
   "app-storage: [1]",
 ]) {
   if (!fields.includes(requirement)) fail(`app/app.md does not require ${requirement}`);
@@ -73,18 +71,7 @@ if (/works\.(create|patch|trash|restore|request_review|review|export)/.test(work
   fail("document-draft.md names a Works mutation");
 }
 
-// 4. Views: JSON, contract app-views/v1, field ids are safe identifiers.
-const views = JSON.parse(read("app/views/app-views-v1.json"));
-if (views.contract !== "app-views/v1") fail("views contract is not app-views/v1");
-if (views.app !== "works") fail("views app is not works");
-const safeId = /^[a-z][a-z0-9-]*$/;
-for (const view of views.views) {
-  for (const field of view.fields) {
-    if (!safeId.test(field.id)) fail(`view field id ${field.id} is not a safe identifier`);
-  }
-}
-
-// 5. Screen: declares only host operations and matching asset digests.
+// 4. Screen: declares only host operations and matching asset digests.
 const screens = JSON.parse(read("app/screens/works/screens.json"));
 if (screens.contract !== "app-screens/v2") fail("screens contract is not app-screens/v2");
 if (screens.host_contract !== "screen-records.v1") fail("screens host_contract is not screen-records.v1");
@@ -112,7 +99,7 @@ for (const asset of screens.assets) {
   if (asset.size !== bytes.length) fail(`${asset.name} size does not match its bytes`);
 }
 
-// 5b. Package-owned storage: descriptor, raw-byte migration checksums and the
+// 5. Package-owned storage: descriptor, raw-byte migration checksums and the
 //     Works content boundary. The host's app-storage validator remains the
 //     authority for keyword admission and execution.
 const storage = validateAppStoragePackage(bundle);

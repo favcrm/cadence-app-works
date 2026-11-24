@@ -6,13 +6,13 @@ not change installation or data identities.
 
 ## Status
 
-WRK-6 made `app/` an installable bundle; WRK-10 makes it `0.3.0` with an
-app-owned logical storage schema. The hosted AgenticOS board implements the
-content half of the host seam (AOS-399); review and export are not available in
-0.3.0. See `docs/host-contract.md`.
+Works 0.3 adds app-owned logical storage. Version 0.3.1 removes the unused
+`app-views/v1` declaration and data file: the hosted board displays the Works
+screen and does not serve that contract. The hosted AgenticOS board serves
+content operations (AOS-399), not review or export. See `docs/host-contract.md`.
 
 - `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]`,
-  `app-views[1]` and `app-storage[1]`. Declares no connections and no
+  `screen-startup[1]` and `app-storage[1]`. Declares no connections or
   capabilities.
 - `app/app-storage.json` and `app/storage/001-documents.json`: the
   `app-storage/v1` descriptor and its one raw-byte-checksummed migration. They
@@ -28,7 +28,6 @@ content half of the host seam (AOS-399); review and export are not available in
   `works.*` host operations declared in `screens.json`. Review and export are
   host-confirmed slots. The screen has no localhost, reference-host or actor
   input.
-- `app/views/app-views-v1.json`: data-only list and detail views.
 - `app/assets/works.svg`: listing icon.
 
 The host, not the app, decides who may author, review, approve or export.
