@@ -1,15 +1,15 @@
 # Cadence Works App
 
-Private repository for the independent Cadence **Works** app: docs, sheets and
-decks with revisioned review and export gates. The app identity is `works`; the
-repository name does not change installation or data identities.
+Private repository for the independent Cadence **Works** app for revisioned
+docs, sheets and decks. The app identity is `works`; the repository name does
+not change installation or data identities.
 
 ## Status
 
 WRK-6 made `app/` an installable bundle; WRK-10 makes it `0.3.0` with an
 app-owned logical storage schema. The hosted AgenticOS board implements the
-content half of the host seam (AOS-399, on agenticos-v2 `staging`, not yet
-deployed); review and export are not served yet. See `docs/host-contract.md`.
+content half of the host seam (AOS-399); review and export are not available in
+0.3.0. See `docs/host-contract.md`.
 
 - `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]`,
   `app-views[1]` and `app-storage[1]`. Declares no connections and no
@@ -50,8 +50,7 @@ Install, approval and context are host operations gated by the operator's
 verified session. This repository does not run them. A host older than the
 declared contracts refuses the bundle. Native Cadence has no app-storage
 execution runtime and refuses the `app-storage: [1]` requirement; hosted v2
-serves the six content operations over the `documents` schema (AOS-399, on v2
-`staging`, not yet deployed) but has
+serves the six content operations over the `documents` schema (AOS-399) but has
 no review/export slot executor or verified reviewer authority yet. No install,
 adoption or hosted review/export is claimed here.
 
@@ -175,8 +174,29 @@ matches `app.md` (the version is bound to the tag), and the `publish` workflow:
 3. delivers the exact bundle to the hosted catalogue's
    `/public/apps/candidates` with a GitHub OIDC token. The catalogue binds this
    repository, workflow and tag to the `works` app id, re-verifies the bytes
-   and lists that version. Listing is not installation, and an app the
-   catalogue holds `disabled` stays uninstallable.
+   and lists that version. Listing is not installation.
+
+The catalogue refuses publication with `app_disabled` while Works is disabled.
+For an authorized cutover, use the v2 operator registry script
+(`apps/api/scripts/catalogue-registry.ts` on deployed `main`):
+
+1. With Works still disabled, run `set-release --app works --version <version>
+   --publication disabled` for each older published version. Confirm each
+   release's publication state in the managed catalogue; the public directory
+   reports only `app_disabled` while the app is disabled.
+2. Run `set-app --id works --availability enabled`. The console's **Enable app**
+   button requires a published release, so it cannot perform this step. If the
+   operator registry route is unavailable, leave Works disabled.
+3. Confirm `/public/apps/works/versions` has no recommended version and every
+   old release reports `release_disabled`. Then push the new tag. Match the
+   publish receipt's digest to the installable, recommended version in that
+   same directory. If publication fails, check whether it landed before
+   retrying; restore app-level `disabled` if the cutover cannot complete.
+   Do not re-enable old releases.
+
+For registry commands, `--remote` alone prints a plan. Applying to production
+also requires `--apply --confirm-account <account-id>` and operator
+authorization.
 
 `DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json node .github/scripts/publish.mjs`
 on a matching tag ref prints the entry and artifact hash without sending.
