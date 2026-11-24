@@ -79,10 +79,12 @@ enter that object, because the content digest is computed over the native
 `{kind,title,content}` value and must match the stored revision digest.
 
 Native Cadence has no app-storage execution runtime and refuses the
-syntactically valid `app-storage: [1]` requirement. The hosted v2 runtime
-admits `works.*` operation names but has no Works domain backend, no
-`slot-prepare`/`slot-confirm` executor for the existing host-drawn review/export
-confirmation, and no verified-second-reviewer authority yet; this package does
-not install or claim runtime acceptance there until that host seam lands. The
-offline check in `scripts/check-scaffold.mjs` proves member shape, checksums and
-the content boundary only.
+syntactically valid `app-storage: [1]` requirement. On the hosted AgenticOS
+board (AOS-399) the host serves `works.query`, `works.get`, `works.create`,
+`works.patch`, `works.trash` and `works.restore` over this table and keeps the
+owner, revisions, review state and trash flag in its own tables; only a board
+owner writes. `works.request_review`, `works.review` and `works.export` answer
+`review_unavailable` until that host has a verified second-reviewer authority
+and the host-drawn review/export confirmation. The offline check in
+`scripts/check-scaffold.mjs` proves member shape, checksums and the content
+boundary only.

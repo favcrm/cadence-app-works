@@ -181,7 +181,7 @@ The package deliberately declares no generic record bridge: `default_table` is
 trusted host adapter resolves the explicit logical `documents` handle
 (`appStorage.table(installId, "documents")`) and the nine `works.*` operations
 are the only interface. The host's generic record resolver already refuses a
-null default table (`apps/api/src/tenant-board/app-records.ts:386`), so no
+null default table (`resolveTable` in `apps/api/src/tenant-board/app-records.ts`), so no
 `records.list`/`show`/`create`/`update` can reach `documents`. A generic read
 would be a second projection that could bypass the host's trashed/revision/review
 filters; a generic write would bypass the immutable revision, audit, CAS and

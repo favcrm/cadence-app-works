@@ -7,8 +7,9 @@ repository name does not change installation or data identities.
 ## Status
 
 WRK-6 made `app/` an installable bundle; WRK-10 makes it `0.3.0` with an
-app-owned logical storage schema. The runtime host seam is not implemented yet;
-see `docs/host-contract.md`.
+app-owned logical storage schema. The hosted AgenticOS board implements the
+content half of the host seam (AOS-399, on agenticos-v2 `staging`, not yet
+deployed); review and export are not served yet. See `docs/host-contract.md`.
 
 - `app/app.md`: manifest. Requires `app-screens[1]`, `screen-records[1]`,
   `app-views[1]` and `app-storage[1]`. Declares no connections and no
@@ -49,7 +50,8 @@ Install, approval and context are host operations gated by the operator's
 verified session. This repository does not run them. A host older than the
 declared contracts refuses the bundle. Native Cadence has no app-storage
 execution runtime and refuses the `app-storage: [1]` requirement; hosted v2
-serves the six content operations over the `documents` schema (AOS-399) but has
+serves the six content operations over the `documents` schema (AOS-399, on v2
+`staging`, not yet deployed) but has
 no review/export slot executor or verified reviewer authority yet. No install,
 adoption or hosted review/export is claimed here.
 
