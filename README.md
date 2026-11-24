@@ -176,10 +176,27 @@ matches `app.md` (the version is bound to the tag), and the `publish` workflow:
    repository, workflow and tag to the `works` app id, re-verifies the bytes
    and lists that version. Listing is not installation.
 
-The publisher refuses `app_disabled` if the catalogue has disabled Works. To
-reopen the catalogue without exposing older releases, the operator must disable
-each previous release before enabling the app. Confirm no old version is
-installable in `/public/apps/works/versions` before pushing the new tag.
+The catalogue refuses publication with `app_disabled` while Works is disabled.
+For an authorized cutover, use the v2 operator registry script
+(`apps/api/scripts/catalogue-registry.ts` on deployed `main`):
+
+1. With Works still disabled, run `set-release --app works --version <version>
+   --publication disabled` for each older published version. Confirm each
+   release's publication state in the managed catalogue; the public directory
+   reports only `app_disabled` while the app is disabled.
+2. Run `set-app --id works --availability enabled`. The console's **Enable app**
+   button requires a published release, so it cannot perform this step. If the
+   operator registry route is unavailable, leave Works disabled.
+3. Confirm `/public/apps/works/versions` has no recommended version and every
+   old release reports `release_disabled`. Then push the new tag. Match the
+   publish receipt's digest to the installable, recommended version in that
+   same directory. If publication fails, check whether it landed before
+   retrying; restore app-level `disabled` if the cutover cannot complete.
+   Do not re-enable old releases.
+
+For registry commands, `--remote` alone prints a plan. Applying to production
+also requires `--apply --confirm-account <account-id>` and operator
+authorization.
 
 `DRY_RUN=1 APP_CHECK_JSON=/tmp/app-check.json node .github/scripts/publish.mjs`
 on a matching tag ref prints the entry and artifact hash without sending.
