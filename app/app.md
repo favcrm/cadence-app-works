@@ -1,19 +1,16 @@
 ---
 app: works
 title: Works
-version: '0.3.0'
+version: '0.3.1'
 summary: Create and edit revisioned docs, decks and sheets in a hosted workspace.
 needs:
   connections: []
   capabilities: {}
-  views:
-    contract: app-views/v1
   requires:
     contracts:
       app-screens: [1]
       screen-records: [1]
       screen-startup: [1]
-      app-views: [1]
       app-storage: [1]
 listing:
   tagline: Revisioned docs, decks and sheets for your workspace

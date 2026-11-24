@@ -13,7 +13,7 @@ cadence-app-works/
   README.md
   AGENTS.md
   app/
-    app.md                 # manifest: 0.3.0, requires app-storage[1]
+    app.md                 # manifest: hosted bundle, requires app-storage[1]
     app-storage.json       # app-storage/v1 descriptor and migration checksums
     storage/
       001-documents.json   # create documents + documents_kind index
@@ -23,8 +23,6 @@ cadence-app-works/
       screens.json
       client.js
       app.css
-    views/
-      app-views-v1.json    # data-only list/detail field descriptions
     assets/
       works.svg
   design/mockup/           # reviewed static reference; not shipped source
@@ -85,9 +83,9 @@ reference host, not the master/chat/agent tool-call command, and neither is a
 fallback for the managed app-storage namespace.
 
 `app/` is the installable bundle. `app/app.md` requires `app-screens[1]`,
-`screen-records[1]`, `app-views[1]` and `app-storage[1]` and ships the
-`document-draft` workflow, the nine-operation Works screen, data-only views and
-the app-owned `documents` schema. Native Cadence has no app-storage execution
+`screen-records[1]`, `screen-startup[1]` and `app-storage[1]` and ships the
+`document-draft` workflow, the nine-operation Works screen and the app-owned
+`documents` schema. Native Cadence has no app-storage execution
 runtime and refuses the requirement; hosted v2 serves the six content
 operations over the `documents` schema but has no review/export slot executor
 or verified reviewer authority yet. The design

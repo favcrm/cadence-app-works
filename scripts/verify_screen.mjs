@@ -157,7 +157,7 @@ if (JSON.stringify(decl.startup) !== JSON.stringify(["runtime.js", "client.js"])
 }
 
 const manifest = decoder.decode(readFileSync(safePath(root, "app/app.md"))).split("\n---\n")[0];
-for (const contract of ["app-screens", "screen-records", "screen-startup", "app-views"]) {
+for (const contract of ["app-screens", "screen-records", "screen-startup"]) {
   if (!new RegExp(`(^|[\\s{,])${contract}: \\[1\\]`, "m").test(manifest)) {
     fail(`Works manifest must require ${contract} v1`);
   }
