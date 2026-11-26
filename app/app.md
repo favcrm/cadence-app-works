@@ -1,7 +1,7 @@
 ---
 app: works
 title: Works
-version: '0.4.2'
+version: '0.5.0'
 summary: Create and edit revisioned docs, decks and sheets in a hosted workspace.
 needs:
   connections: []
