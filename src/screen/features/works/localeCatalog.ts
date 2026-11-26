@@ -287,6 +287,8 @@ export const messages = {
   "cfos.slides_bring_forward": { en: "Bring forward", "zh-TW": "上移一層" },
   "cfos.slides_send_backward": { en: "Send backward", "zh-TW": "下移一層" },
   "cfos.slides_duplicate_block": { en: "Duplicate block", "zh-TW": "複製元件" },
+  "cfos.slides_toggle_rail": { en: "Slides list", "zh-TW": "投影片列表" },
+  "cfos.slides_toggle_inspector": { en: "Inspector & components", "zh-TW": "屬性與元件" },
 
   "starter.doc_title": { en: "Untitled doc", "zh-TW": "未命名文件" },
   "starter.doc_heading": { en: "Overview", "zh-TW": "概覽" },

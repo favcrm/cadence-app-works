@@ -75,6 +75,8 @@ export interface SlidesLabels {
   uploadImage: string;
   exportHtml: string;
   fieldNotes: string;
+  toggleSlidesRail: string;
+  toggleInspector: string;
 }
 
 const SNAP_THRESHOLD = 6;
@@ -173,8 +175,29 @@ export function mountSlides({
     const html = exportDeckHtml(deckTitle, deck);
     triggerDownload(sanitizeFileName(deckTitle, "deck", "html"), html, "text/html;charset=utf-8");
   });
+  const toggleRailBtn = iconBtn(ICONS.layers, labels.toggleSlidesRail, () => {
+    if (readOnly || presentMode) return;
+    if (!editMode) editMode = true;
+    const open = !app.classList.contains("rail-open");
+    app.classList.remove("insp-open");
+    app.classList.toggle("rail-open", open);
+    syncModeClasses();
+    renderAll();
+  });
+  toggleRailBtn.classList.add("cfos-narrow-only");
+  const toggleInspBtn = iconBtn(ICONS.grid, labels.toggleInspector, () => {
+    if (readOnly || presentMode) return;
+    if (!editMode) editMode = true;
+    const open = !app.classList.contains("insp-open");
+    app.classList.remove("rail-open");
+    app.classList.toggle("insp-open", open);
+    syncModeClasses();
+    renderRightSidebar();
+  });
+  toggleInspBtn.classList.add("cfos-narrow-only");
 
   const pill = el("div", { class: "cfos-slide-pill" }, [
+    readOnly ? null : toggleRailBtn,
     prevBtn,
     counterEl,
     nextBtn,
@@ -184,6 +207,7 @@ export function mountSlides({
     readOnly ? null : editBtn,
     presentBtn,
     exportBtn,
+    readOnly ? null : toggleInspBtn,
   ]);
 
   const exitPresentBtn = el("button", {
@@ -265,7 +289,12 @@ export function mountSlides({
   function syncModeClasses() {
     app.classList.toggle("editing", editMode && !presentMode && !readOnly);
     app.classList.toggle("presenting", presentMode);
+    if (readOnly || presentMode || !editMode) {
+      app.classList.remove("rail-open", "insp-open");
+    }
     editBtn.classList.toggle("active", editMode && !presentMode && !readOnly);
+    toggleRailBtn.classList.toggle("active", app.classList.contains("rail-open"));
+    toggleInspBtn.classList.toggle("active", app.classList.contains("insp-open"));
     leftPanel.style.display = readOnly || presentMode ? "none" : editMode ? "flex" : "none";
     rightPanel.style.display = readOnly || presentMode ? "none" : editMode ? "flex" : "none";
   }

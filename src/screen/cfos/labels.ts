@@ -155,6 +155,8 @@ export function useSlidesLabels(): SlidesLabels {
       uploadImage: t("cfos.insert_image"),
       exportHtml: t("cfos.download_html"),
       fieldNotes: t("editor.slide_notes"),
+      toggleSlidesRail: t("cfos.slides_toggle_rail"),
+      toggleInspector: t("cfos.slides_toggle_inspector"),
     }),
     [t],
   );
