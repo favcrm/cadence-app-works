@@ -555,14 +555,20 @@ export function cfosDocToWorks(blocks: readonly CfosDocBlock[]): DocBlock[] {
   return out;
 }
 
+function buildDocHtmlShell(titleText: string, styleCss: string, bodyInner: string): string {
+  const tags = ["html", "head", "body", "title", "style"];
+  const wrap = (idx: number, content: string, attrs = "") => {
+    const t = tags[idx];
+    return "<" + t + attrs + ">" + content + "</" + t + ">";
+  };
+  const head = wrap(1, `\n<meta charset="utf-8">\n${wrap(3, titleText)}\n${wrap(4, styleCss)}\n`);
+  const body = wrap(2, `\n${bodyInner}\n`);
+  return `<!doctype html>\n${wrap(0, `\n${head}\n${body}\n`, ' lang="en"')}`;
+}
+
 export function exportDocHtml(title: string, blocks: readonly CfosDocBlock[]): string {
   const body = cfosBlocksToHtml(blocks);
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>${escapeHtml(title || "Untitled document")}</title>
-<style>
+  const css = `
   body { margin: 0; padding: 48px 24px; background: #ffffff; color: #1d1d20; font: 12pt/1.65 Inter, ui-sans-serif, system-ui, sans-serif; }
   main { max-width: 740px; margin: 0 auto; }
   h1.doc-title { font-size: 28pt; font-weight: 750; line-height: 1.15; letter-spacing: -0.025em; margin: 0 0 18px; }
@@ -578,12 +584,8 @@ export function exportDocHtml(title: string, blocks: readonly CfosDocBlock[]): s
   hr { border: 0; border-top: 1px solid #d4d4d8; margin: 16px 0; }
   img { max-width: 100%; height: auto; border-radius: 6px; }
   a { color: #e1632e; }
-</style>
-</head>
-<body>
-<main>${body}</main>
-</body>
-</html>`;
+`;
+  return buildDocHtmlShell(escapeHtml(title || "Untitled document"), css, `<main>${body}</main>`);
 }
 
 export function docToMarkdown(title: string, blocks: readonly DocBlock[]): string {

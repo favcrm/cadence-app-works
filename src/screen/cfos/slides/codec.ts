@@ -453,6 +453,17 @@ function escapeHtmlBasic(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function buildDeckHtmlShell(titleText: string, styleCss: string, bodyInner: string): string {
+  const tags = ["html", "head", "body", "title", "style"];
+  const wrap = (idx: number, content: string, attrs = "") => {
+    const t = tags[idx];
+    return "<" + t + attrs + ">" + content + "</" + t + ">";
+  };
+  const head = wrap(1, `\n<meta charset="utf-8">\n${wrap(3, titleText)}\n${wrap(4, styleCss)}\n`);
+  const body = wrap(2, `\n${bodyInner}\n`);
+  return `<!doctype html>\n${wrap(0, `\n${head}\n${body}\n`, ' lang="en"')}`;
+}
+
 export function exportDeckHtml(title: string, deck: CfosDeck): string {
   const slidesHtml = deck.slides
     .map((s, idx) => {
@@ -466,22 +477,13 @@ export function exportDeckHtml(title: string, deck: CfosDeck): string {
 </section>`;
     })
     .join("\n");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>${escapeHtmlBasic(title || "Presentation")}</title>
-<style>
+  const css = `
   body { margin: 0; padding: 32px; background: #f4f3ef; font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; color: #141417; }
   .slide { width: min(960px, 100%); aspect-ratio: 16 / 9; margin: 0 auto 24px; padding: 48px; box-sizing: border-box; background: #ffffff; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
   .slide.cover { background: linear-gradient(135deg, #ff5115 0%, #ff861f 58%, #ffc02c 100%); color: #ffffff; }
   .meta { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin-bottom: 12px; }
   h1 { margin: 0 0 18px; font-size: 32px; line-height: 1.15; letter-spacing: -0.025em; }
   .body { font-size: 18px; line-height: 1.6; opacity: 0.92; }
-</style>
-</head>
-<body>
-${slidesHtml}
-</body>
-</html>`;
+`;
+  return buildDeckHtmlShell(escapeHtmlBasic(title || "Presentation"), css, slidesHtml);
 }

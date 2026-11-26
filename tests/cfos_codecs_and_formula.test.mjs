@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   DOC_SIDECAR_LABEL,
@@ -374,4 +375,20 @@ test("regression: empty speaker notes survive toWire trimming and h2 strips mark
   assert.equal(wireDoc[0].type, "h2");
   assert.equal(wireDoc[0].text.startsWith("##"), false);
   assert.ok(wireDoc.some((b) => b.type === "callout" && b.label === DOC_SIDECAR_LABEL));
+});
+
+test("regression: exported HTML keeps full document shell while built client.js omits literal document tags", () => {
+  const docHtml = exportDocHtml("Spec", [{ id: "b_1", html: "<p>Hello</p>" }]);
+  for (const tag of ["<!doctype html>", "<html", "<head>", "<body>", "</body>", "</html>"]) {
+    assert.ok(docHtml.includes(tag), `docHtml missing ${tag}`);
+  }
+  const deckHtml = exportDeckHtml("Deck", {
+    themeVersion: "1",
+    slides: [makeCfosSlideTemplate("cover", 0)],
+  });
+  for (const tag of ["<!doctype html>", "<html", "<head>", "<body>", "</body>", "</html>"]) {
+    assert.ok(deckHtml.includes(tag), `deckHtml missing ${tag}`);
+  }
+  const clientJs = readFileSync(new URL("../app/screens/works/client.js", import.meta.url), "utf8");
+  assert.equal(/<\/?(?:head|body|html)\b/i.test(clientJs), false);
 });
