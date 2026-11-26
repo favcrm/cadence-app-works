@@ -77,7 +77,7 @@ function Mounted() {
     });
   };
 
-  const goList = () => navigate({ ...base, view: "list", record_id: null, params: {} });
+  const goList = () => navigate({ ...base, view: "list", record_id: null });
   const open = (row: Pick<WorksRow, "id">) => navigate({ ...base, view: "list", record_id: row.id });
 
   const quickCreate = (targetKind: Kind) => {
@@ -146,7 +146,7 @@ function Mounted() {
             setRestoreFailure(null);
             setRefreshKey((n) => n + 1);
             void withoutLeaveWarning(() =>
-              patchRoute({ ...base, view: "list", record_id: null, params: {} }),
+              patchRoute({ ...base, view: "list", record_id: null }),
             ).catch((error: unknown) => {
               const failure = classify(error);
               setNavFailure(failure.kind === "message" ? t(failure.key) : t("error.generic"));
