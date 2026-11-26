@@ -12,12 +12,24 @@ export interface ListProps {
   kind: Kind | undefined;
   canvas: boolean;
   canCreate: boolean;
+  creatingKind: Kind | null;
   refreshKey: number;
   onOpen: (row: WorksRow) => void;
+  onQuickCreate: (kind: Kind) => void;
   onNew: () => void;
 }
 
-export function ListView({ scope, kind, canvas, canCreate, refreshKey, onOpen, onNew }: ListProps) {
+export function ListView({
+  scope,
+  kind,
+  canvas,
+  canCreate,
+  creatingKind,
+  refreshKey,
+  onOpen,
+  onQuickCreate,
+  onNew,
+}: ListProps) {
   const { t } = useLocale();
   const [rows, setRows] = useState<WorksRow[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -65,6 +77,8 @@ export function ListView({ scope, kind, canvas, canCreate, refreshKey, onOpen, o
     { value: "name", label: t("sort.name") },
   ];
 
+  const busy = creatingKind !== null;
+
   return (
     <section className="works-list">
       <div className="works-toolbar">
@@ -100,9 +114,36 @@ export function ListView({ scope, kind, canvas, canCreate, refreshKey, onOpen, o
             {t("action.refresh")}
           </Button>
           {!canvas && canCreate ? (
-            <Button size="sm" variant="primary" onClick={onNew}>
-              {t("action.new")}
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="primary"
+                loading={creatingKind === "doc"}
+                disabled={busy}
+                onClick={() => onQuickCreate("doc")}
+              >
+                {t("action.new_doc")}
+              </Button>
+              <Button
+                size="sm"
+                loading={creatingKind === "sheet"}
+                disabled={busy}
+                onClick={() => onQuickCreate("sheet")}
+              >
+                {t("action.new_sheet")}
+              </Button>
+              <Button
+                size="sm"
+                loading={creatingKind === "deck"}
+                disabled={busy}
+                onClick={() => onQuickCreate("deck")}
+              >
+                {t("action.new_deck")}
+              </Button>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={onNew}>
+                {t("action.new")}
+              </Button>
+            </>
           ) : null}
         </div>
       </div>

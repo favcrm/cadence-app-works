@@ -162,6 +162,7 @@ export function classify(error: unknown): Failure {
     expired: "error.expired",
     rejected: "error.rejected",
     timeout: "error.timeout",
+    review_unavailable: "error.review_unavailable",
   };
   if (byCode[code]) return { kind: "message", key: byCode[code] };
   if (status === 429) return { kind: "message", key: "error.busy" };

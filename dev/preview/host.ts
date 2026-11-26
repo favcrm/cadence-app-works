@@ -3,6 +3,8 @@
 // drive the screen: revision CAS, idempotent writes, review/export slots drawn
 // by the host, and a read-only canvas surface. Synthetic data only.
 
+import screensDecl from "../../app/screens/works/screens.json";
+
 type Kind = "doc" | "deck" | "sheet";
 type Section = "all" | "docs" | "sheets" | "decks";
 type Json = Record<string, unknown>;
@@ -128,13 +130,15 @@ const detail = (i: Item): Json => ({
 });
 
 function actionsList(): string[] {
+  const declared = screensDecl.operations as string[];
   if (state.canvas) {
-    return state.readsAdmitted ? ["works.query", "works.get", "screen.route.patch"] : ["screen.route.patch"];
+    return declared.filter((op) =>
+      state.readsAdmitted
+        ? op === "works.query" || op === "works.get" || op === "screen.route.patch"
+        : op === "screen.route.patch",
+    );
   }
-  return [
-    "works.query", "works.get", "works.create", "works.patch", "works.trash", "works.restore",
-    "works.request_review", "works.review", "works.export", "screen.route.patch",
-  ];
+  return [...declared];
 }
 
 function pushScreen(): void {

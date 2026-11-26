@@ -16,18 +16,18 @@
     {
       "name": "client.js",
       "media_type": "text/javascript",
-      "size": 101117,
-      "sha256": "sha256:dfd7a930c7c4ff832d035d391777f614d2660122fff42fe7e8aeb3537f4184f2"
+      "size": 262168,
+      "sha256": "sha256:1ee0408a2d4cf7b047844bc87c1373a5b202c3c981dc814db20a9424c28092fe"
     },
     {
       "name": "works.css",
       "media_type": "text/css",
-      "size": 26212,
-      "sha256": "sha256:cd01adda33ce3fd05d1b5b57456598ecfa2cf5058eee261fdbfcf6bb31c18064"
+      "size": 44751,
+      "sha256": "sha256:7043554ba38c599a98ea7409d03308fb979c8ce5aca0a0d5a1449047f481c8b7"
     }
   ],
   "provenance": {
-    "source_digest": "sha256:7e6d6df13ef99500ea4ef215cfb370042312dbb250c845a38dc6bdd0264a435c",
+    "source_digest": "sha256:d928e5c1eecdff46e21a6cc5f154ece6a9a07ec2f18410746342c4992e16b314",
     "sdk_digest": "sha256:fd65c974511e63b3996e9fa7e438fb4e39df5f508d11636116ef150fcc123e35",
     "toolchain_digest": "sha256:e21cfc8222db408abe6ba5a482520639d9cf4b96481c19aff4b4246af8a65e42"
   },
@@ -45,6 +45,7 @@
     "works.trash",
     "works.restore",
     "works.request_review",
+    "screen.route.patch",
     "works.review",
     "works.export"
   ],

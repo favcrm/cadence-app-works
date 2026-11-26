@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { setUnsaved } from "../../bridge/leave";
 import type { Kind } from "../../bridge/operations";
 import type { DisplayScope } from "../../bridge/scope";
-import { emptyContent, KINDS, validateDraft, type Content, type WorksItem } from "../../domain/works";
+import { starterDraft } from "../../cfos/labels";
+import { KINDS, validateDraft, type Content, type WorksItem } from "../../domain/works";
 import { classify, createItem } from "./api";
 import { ContentEditor } from "./editors";
 import { useLocale } from "./locale";
@@ -22,8 +23,10 @@ export function NewView({
 }) {
   const { t } = useLocale();
   const [kind, setKind] = useState<Kind>(initialKind);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState<Content>(() => emptyContent(initialKind));
+  const initial = starterDraft(initialKind, t);
+  const [title, setTitle] = useState(initial.title);
+  const [content, setContent] = useState<Content>(initial.content);
+  const [resetKey, setResetKey] = useState(0);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,60 +57,75 @@ export function NewView({
     } catch (failure) {
       const outcome = classify(failure);
       setError(
-        outcome.kind === "message" ? t(outcome.key) : outcome.kind === "unavailable" ? t("error.forbidden") : t("error.generic"),
+        outcome.kind === "message"
+          ? t(outcome.key)
+          : outcome.kind === "unavailable"
+            ? t("error.forbidden")
+            : t("error.generic"),
       );
       setBusy(false);
     }
   };
 
   return (
-    <form className="works-form works-new" noValidate onSubmit={(event) => void submit(event)}>
-      <h2 className="text-section" data-outlet-heading>
-        {t("new.title")}
-      </h2>
-      <Field label={t("field.kind")}>
-        {(control) => (
-          <Select
-            {...control}
-            value={kind}
-            options={kindOptions}
-            onChange={(value) => {
-              const next = KINDS.find((k) => k === value);
-              if (!next || next === kind) return;
-              setKind(next);
-              setContent(emptyContent(next));
-            }}
-          />
-        )}
-      </Field>
-      <Field label={t("field.title")}>
-        {(control) => (
-          <input
-            {...control}
-            className="field"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              setTouched(true);
-            }}
-          />
-        )}
-      </Field>
-      <ContentEditor
-        content={content}
-        onChange={(next) => {
-          setContent(next);
-          setTouched(true);
-        }}
-      />
+    <form className="works-form works-new-shell" noValidate onSubmit={(event) => void submit(event)}>
+      <div className="works-toolbar">
+        <h2 className="text-section works-heading" data-outlet-heading>
+          {t("new.title")}
+        </h2>
+        <div className="works-chips">
+          <Button variant="primary" size="sm" type="submit" loading={busy}>
+            {t("action.create")}
+          </Button>
+          <Button size="sm" disabled={busy} onClick={onCancel}>
+            {t("action.cancel")}
+          </Button>
+        </div>
+      </div>
+      <div className="works-new-meta">
+        <Field label={t("field.kind")}>
+          {(control) => (
+            <Select
+              {...control}
+              value={kind}
+              options={kindOptions}
+              onChange={(value) => {
+                const next = KINDS.find((k) => k === value);
+                if (!next || next === kind) return;
+                const seeded = starterDraft(next, t);
+                setKind(next);
+                if (!touched) setTitle(seeded.title);
+                setContent(seeded.content);
+                setResetKey((k) => k + 1);
+              }}
+            />
+          )}
+        </Field>
+        <Field label={t("field.title")}>
+          {(control) => (
+            <input
+              {...control}
+              className="field"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setTouched(true);
+              }}
+            />
+          )}
+        </Field>
+      </div>
       {error ? <ErrorNotice>{error}</ErrorNotice> : null}
-      <div className="works-chips">
-        <Button variant="primary" type="submit" loading={busy}>
-          {t("action.create")}
-        </Button>
-        <Button disabled={busy} onClick={onCancel}>
-          {t("action.cancel")}
-        </Button>
+      <div className="works-workbench-frame">
+        <ContentEditor
+          title={title}
+          content={content}
+          resetKey={resetKey}
+          onChange={(next) => {
+            setContent(next);
+            setTouched(true);
+          }}
+        />
       </div>
     </form>
   );

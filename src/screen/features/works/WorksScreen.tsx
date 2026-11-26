@@ -1,10 +1,12 @@
 import { ErrorNotice, Loading, Notice, Button } from "@cadence/screen-ui";
 import { useEffect, useRef, useState } from "react";
 import { withoutLeaveWarning } from "../../bridge/leave";
+import type { Kind } from "../../bridge/operations";
 import { patchRoute } from "../../bridge/route";
 import { scopeError, useCanvasReadOnly, useScope } from "../../bridge/scope";
+import { starterDraft } from "../../cfos/labels";
 import { kindSection, sectionKind, type WorksRow } from "../../domain/works";
-import { classify, restoreItem } from "./api";
+import { classify, createItem, restoreItem } from "./api";
 import { DetailView } from "./DetailView";
 import { ListView } from "./ListView";
 import { WorksLocaleProvider, useLocale, type Locale } from "./locale";
@@ -38,6 +40,8 @@ function Mounted() {
   const [unreachable, setUnreachable] = useState(false);
   const [trashed, setTrashed] = useState<Trashed | null>(null);
   const [restoreFailure, setRestoreFailure] = useState<string | null>(null);
+  const [navFailure, setNavFailure] = useState<string | null>(null);
+  const [creatingKind, setCreatingKind] = useState<Kind | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -59,11 +63,56 @@ function Mounted() {
   const openId = route.record_id ?? route.params.id ?? null;
   const base = { section: route.section };
 
-  const goList = () => void patchRoute({ ...base, view: "list", record_id: null, params: {} });
-  const open = (row: Pick<WorksRow, "id">) => void patchRoute({ ...base, view: "list", record_id: row.id });
+  const navigate = (patch: Parameters<typeof patchRoute>[0]) => {
+    setNavFailure(null);
+    patchRoute(patch).catch((error: unknown) => {
+      const failure = classify(error);
+      setNavFailure(
+        failure.kind === "message"
+          ? t(failure.key)
+          : failure.kind === "unavailable"
+            ? t("error.forbidden")
+            : t("error.generic"),
+      );
+    });
+  };
+
+  const goList = () => navigate({ ...base, view: "list", record_id: null, params: {} });
+  const open = (row: Pick<WorksRow, "id">) => navigate({ ...base, view: "list", record_id: row.id });
+
+  const quickCreate = (targetKind: Kind) => {
+    if (creatingKind !== null || canvas) return;
+    setNavFailure(null);
+    setCreatingKind(targetKind);
+    const seeded = starterDraft(targetKind, t);
+    createItem(scope, targetKind, seeded.title, seeded.content).then(
+      (item) => {
+        setCreatingKind(null);
+        setRefreshKey((n) => n + 1);
+        void withoutLeaveWarning(() =>
+          patchRoute({ section: kindSection(item.kind), view: "list", record_id: item.id }),
+        ).catch((error: unknown) => {
+          const failure = classify(error);
+          setNavFailure(failure.kind === "message" ? t(failure.key) : t("error.generic"));
+        });
+      },
+      (error: unknown) => {
+        setCreatingKind(null);
+        const failure = classify(error);
+        setNavFailure(
+          failure.kind === "message"
+            ? t(failure.key)
+            : failure.kind === "unavailable"
+              ? t("error.forbidden")
+              : t("error.generic"),
+        );
+      },
+    );
+  };
 
   return (
     <main className={`app-outlet works${canvas ? " works-canvas" : ""}`}>
+      {navFailure ? <ErrorNotice>{navFailure}</ErrorNotice> : null}
       {route.view === "new" && !canvas ? (
         <NewView
           scope={scope}
@@ -73,7 +122,10 @@ function Mounted() {
             setRefreshKey((n) => n + 1);
             void withoutLeaveWarning(() =>
               patchRoute({ section: kindSection(item.kind), view: "list", record_id: item.id }),
-            );
+            ).catch((error: unknown) => {
+              const failure = classify(error);
+              setNavFailure(failure.kind === "message" ? t(failure.key) : t("error.generic"));
+            });
           }}
         />
       ) : openId ? (
@@ -93,7 +145,12 @@ function Mounted() {
             setTrashed(next);
             setRestoreFailure(null);
             setRefreshKey((n) => n + 1);
-            void withoutLeaveWarning(() => patchRoute({ ...base, view: "list", record_id: null, params: {} }));
+            void withoutLeaveWarning(() =>
+              patchRoute({ ...base, view: "list", record_id: null, params: {} }),
+            ).catch((error: unknown) => {
+              const failure = classify(error);
+              setNavFailure(failure.kind === "message" ? t(failure.key) : t("error.generic"));
+            });
           }}
         />
       ) : (
@@ -129,9 +186,11 @@ function Mounted() {
             kind={kind}
             canvas={canvas}
             canCreate={can("works.create")}
+            creatingKind={creatingKind}
             refreshKey={refreshKey}
             onOpen={open}
-            onNew={() => void patchRoute({ ...base, view: "new", record_id: null })}
+            onQuickCreate={quickCreate}
+            onNew={() => navigate({ ...base, view: "new", record_id: null })}
           />
         </>
       )}

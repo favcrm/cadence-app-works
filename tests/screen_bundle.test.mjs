@@ -27,10 +27,10 @@ test("built screen assets match the declared sha256 and size", () => {
   assert.ok(total <= 2 * 1024 * 1024);
 });
 
-test("the nine works operations keep their names and call/slot split", () => {
+test("the works and route operations keep their names and call/slot split", () => {
   assert.deepEqual(decl.operations, [
     "works.query", "works.get", "works.create", "works.patch", "works.trash",
-    "works.restore", "works.request_review", "works.review", "works.export",
+    "works.restore", "works.request_review", "screen.route.patch", "works.review", "works.export",
   ]);
   assert.deepEqual(decl.may, ["records.call", "records.slot"]);
   assert.equal(decl.host_contract, "screen-records.v1");

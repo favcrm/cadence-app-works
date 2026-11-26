@@ -231,8 +231,10 @@ export function validateDraft(title: string, content: Content): DraftProblem | n
   const trimmed = title.trim();
   if (!trimmed) return "title_required";
   if (byteLength(trimmed) > TITLE_BYTES) return "title_long";
-  if (content.kind === "doc" && content.blocks.some((b) => !b.text.trim())) return "block_text";
-  if (content.kind === "deck" && content.slides.some((s) => !s.title.trim() || !s.body.trim())) {
+  if (content.kind === "doc" && (!content.blocks.length || content.blocks.some((b) => !b.text.trim()))) {
+    return "block_text";
+  }
+  if (content.kind === "deck" && (!content.slides.length || content.slides.some((s) => !s.title.trim() || !s.body.trim()))) {
     return "slide_text";
   }
   if (content.kind === "sheet") {
