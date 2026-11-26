@@ -22,7 +22,7 @@ export function ContentView({
   if (content.kind === "doc") {
     return (
       <DocWorkbench
-        title={title}
+        documentTitle={title}
         blocks={content.blocks}
         readOnly={true}
         resetKey={resetKey}
@@ -34,6 +34,7 @@ export function ContentView({
   if (content.kind === "deck") {
     return (
       <SlidesWorkbench
+        documentTitle={title}
         slides={content.slides}
         readOnly={true}
         resetKey={resetKey}
@@ -44,6 +45,7 @@ export function ContentView({
   }
   return (
     <SheetWorkbench
+      documentTitle={title}
       columns={content.columns}
       rows={content.rows}
       readOnly={true}

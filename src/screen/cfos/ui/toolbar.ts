@@ -45,6 +45,46 @@ export function group(prio: string | null, items: Node[], first = false): HTMLDi
   return el("div", { class: "cfos-tgroup" + (prio ? " " + prio : "") }, children);
 }
 
+export interface ColorButtonControl {
+  el: HTMLDivElement;
+  setColor(color: string): void;
+  getColor(): string;
+}
+
+export function colorBtn(
+  paths: string,
+  title: string,
+  defaultColor: string,
+  onChange: (color: string) => void,
+): ColorButtonControl {
+  const bar = el("span", { class: "cfos-color-bar" });
+  bar.style.background = defaultColor;
+  const input = el("input", {
+    type: "color",
+    value: defaultColor,
+    title,
+    "aria-label": title,
+  });
+  const button = el("div", { class: "cfos-color-btn", title }, [
+    el("span", { html: icon(paths) }),
+    bar,
+    input,
+  ]);
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+  input.addEventListener("input", () => {
+    bar.style.background = input.value;
+    onChange(input.value);
+  });
+  return {
+    el: button,
+    setColor(color: string) {
+      input.value = color;
+      bar.style.background = color;
+    },
+    getColor: () => input.value,
+  };
+}
+
 export type SelectValue = string | number;
 
 export type SelectOption =
@@ -135,9 +175,9 @@ export function customSelect({
   }
   function openMenu(): void {
     const rect = button.getBoundingClientRect();
-    menu.style.left = Math.round(rect.left) + "px";
+    menu.style.left = Math.min(Math.round(rect.left), Math.max(8, window.innerWidth - 220)) + "px";
     menu.style.top = Math.round(rect.bottom + 4) + "px";
-    menu.style.minWidth = Math.round(Math.max(rect.width, 148)) + "px";
+    menu.style.minWidth = Math.round(Math.max(rect.width, 152)) + "px";
     document.body.appendChild(menu);
     open = true;
     button.classList.add("open");
@@ -175,5 +215,94 @@ export function customSelect({
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
     },
+  };
+}
+
+export interface ActionMenuItem {
+  id: string;
+  label: string;
+  desc?: string;
+  section?: string;
+  onSelect: () => void;
+}
+
+/** Floating action menu anchored to any button (e.g., Export, Insert function, Slide layout). */
+export function bindActionMenu(
+  trigger: HTMLElement,
+  getItems: () => ActionMenuItem[],
+): () => void {
+  let menu: HTMLDivElement | null = null;
+
+  const close = () => {
+    menu?.remove();
+    menu = null;
+    trigger.classList.remove("open");
+  };
+
+  const open = () => {
+    if (menu) {
+      close();
+      return;
+    }
+    const list = getItems();
+    const m = el("div", { class: "cfos-cmenu cfos-action-menu" });
+    let lastSection = "";
+    for (const item of list) {
+      if (item.section && item.section !== lastSection) {
+        lastSection = item.section;
+        m.appendChild(el("div", { class: "cfos-cmenu-section" }, item.section));
+      }
+      const row = el("button", { type: "button", class: "cfos-cmenu-item" }, [
+        el("span", { class: "cfos-am-main" }, item.label),
+        item.desc ? el("span", { class: "ex" }, item.desc) : null,
+      ]);
+      row.addEventListener("mousedown", (e) => e.preventDefault());
+      row.addEventListener("click", () => {
+        close();
+        item.onSelect();
+      });
+      m.appendChild(row);
+    }
+    const rect = trigger.getBoundingClientRect();
+    m.style.left = Math.min(Math.round(rect.left), Math.max(8, window.innerWidth - 260)) + "px";
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < 220 && rect.top > 220) {
+      m.style.bottom = Math.round(window.innerHeight - rect.top + 6) + "px";
+    } else {
+      m.style.top = Math.round(rect.bottom + 4) + "px";
+    }
+    m.style.minWidth = Math.round(Math.max(rect.width, 210)) + "px";
+    document.body.appendChild(m);
+    menu = m;
+    trigger.classList.add("open");
+  };
+
+  const onTriggerClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    open();
+  };
+  const onDocDown = (e: MouseEvent) => {
+    const t = e.target as Node | null;
+    if (menu && !menu.contains(t) && !trigger.contains(t)) close();
+  };
+  const onScroll = (e: Event) => {
+    if (menu && e.target instanceof Node && !menu.contains(e.target)) close();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (menu && e.key === "Escape") close();
+  };
+
+  trigger.addEventListener("mousedown", (e) => e.preventDefault());
+  trigger.addEventListener("click", onTriggerClick);
+  document.addEventListener("mousedown", onDocDown);
+  window.addEventListener("scroll", onScroll, true);
+  document.addEventListener("keydown", onKey);
+
+  return () => {
+    close();
+    trigger.removeEventListener("click", onTriggerClick);
+    document.removeEventListener("mousedown", onDocDown);
+    window.removeEventListener("scroll", onScroll, true);
+    document.removeEventListener("keydown", onKey);
   };
 }

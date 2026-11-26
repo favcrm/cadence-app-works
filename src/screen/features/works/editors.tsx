@@ -24,7 +24,7 @@ export function ContentEditor({
   if (content.kind === "doc") {
     return (
       <DocWorkbench
-        title={title}
+        documentTitle={title}
         blocks={content.blocks}
         readOnly={false}
         resetKey={resetKey}
@@ -36,6 +36,7 @@ export function ContentEditor({
   if (content.kind === "deck") {
     return (
       <SlidesWorkbench
+        documentTitle={title}
         slides={content.slides}
         readOnly={false}
         resetKey={resetKey}
@@ -46,6 +47,7 @@ export function ContentEditor({
   }
   return (
     <SheetWorkbench
+      documentTitle={title}
       columns={content.columns}
       rows={content.rows}
       readOnly={false}

@@ -440,10 +440,156 @@ export function htmlRootToBlocks(root: Element): DocBlock[] {
   return blocks;
 }
 
+export const DOC_SIDECAR_LABEL = "__cfos_doc_v1__";
+const MAX_SIDECAR_BYTES = 62 * 1024;
+
+export interface CfosDocBlock {
+  id: string;
+  html: string;
+}
+
+export function visibleWorksDocBlocks(blocks: readonly DocBlock[]): DocBlock[] {
+  return blocks.filter(
+    (b) => !(b.type === "callout" && b.label === DOC_SIDECAR_LABEL),
+  );
+}
+
+export function worksDocToCfos(blocks: readonly DocBlock[]): CfosDocBlock[] {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (b.type === "callout" && b.label === DOC_SIDECAR_LABEL) {
+      try {
+        const parsed = JSON.parse(b.text);
+        if (
+          Array.isArray(parsed) &&
+          parsed.length > 0 &&
+          parsed.every(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              typeof (item as CfosDocBlock).id === "string" &&
+              typeof (item as CfosDocBlock).html === "string",
+          )
+        ) {
+          return parsed as CfosDocBlock[];
+        }
+      } catch {
+        // Fall through to upgrading visible Wire v0 blocks.
+      }
+    }
+  }
+  const visible = visibleWorksDocBlocks(blocks);
+  if (!visible.length) return [{ id: "b_1", html: "<p><br></p>" }];
+  return visible.map((block, index) => {
+    const id = `b_${index + 1}`;
+    const rawHtml = blockToHtml(block);
+    const tagged = rawHtml.replace(/^<([a-z0-9]+)/i, `<$1 data-block-id="${id}"`);
+    return { id, html: tagged };
+  });
+}
+
+export function cfosBlocksToHtml(blocks: readonly CfosDocBlock[]): string {
+  if (!blocks.length) return "<p><br></p>";
+  return blocks.map((b) => b.html).join("");
+}
+
+function stripTagsToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|h1|h2|h3|blockquote|pre|aside)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+function cfosBlockToFallbackWorksBlock(block: CfosDocBlock): DocBlock | null {
+  const html = block.html.trim();
+  if (!html) return null;
+  if (/^<hr\b/i.test(html)) return { type: "p", text: "---" };
+  if (/^<aside\b/i.test(html)) {
+    const labelMatch = /data-label="([^"]+)"/i.exec(html);
+    const label = labelMatch ? decodeHtml(labelMatch[1]).trim() : "";
+    const withoutLabel = html.replace(/<strong[^>]*data-callout-label="1"[^>]*>[\s\S]*?<\/strong>/i, "");
+    const text = (htmlToMarkdown(withoutLabel) || stripTagsToText(withoutLabel)).trim() || "Note";
+    return label ? { type: "callout", label, text } : { type: "callout", text };
+  }
+  if (/^<h[1-3]\b/i.test(html)) {
+    const inner = html.replace(/^<h[1-3]\b[^>]*>|<\/h[1-3]>$/gi, "");
+    const text = (htmlToMarkdown(inner) || stripTagsToText(inner)).replace(/^#{1,6}\s+/, "").trim();
+    return text ? { type: "h2", text } : null;
+  }
+  const md = htmlToMarkdown(html).trim() || stripTagsToText(html);
+  if (md) return { type: "p", text: md };
+  if (/<img\b/i.test(html)) return { type: "p", text: "[Image]" };
+  return null;
+}
+
+function hasRichDocFormatting(blocks: readonly CfosDocBlock[]): boolean {
+  return blocks.some((b) =>
+    /<(?:h1|h3|blockquote|pre|hr|img|u|s|del|font|ul|ol|a|code)\b|style=|class="doc-title"|text-align/i.test(
+      b.html,
+    ),
+  );
+}
+
+export function cfosDocToWorks(blocks: readonly CfosDocBlock[]): DocBlock[] {
+  const out: DocBlock[] = [];
+  for (const b of blocks) {
+    const parsed = cfosBlockToFallbackWorksBlock(b);
+    if (parsed) out.push(parsed);
+  }
+  if (!out.length) {
+    out.push({ type: "p", text: " " });
+  }
+  if (hasRichDocFormatting(blocks) || blocks.length !== out.length) {
+    const payload = JSON.stringify(blocks);
+    const sidecar: DocBlock = {
+      type: "callout",
+      label: DOC_SIDECAR_LABEL,
+      text: payload,
+    };
+    const candidate = [...out, sidecar];
+    if (new TextEncoder().encode(JSON.stringify({ blocks: candidate })).length <= MAX_SIDECAR_BYTES) {
+      return candidate;
+    }
+  }
+  return out;
+}
+
+export function exportDocHtml(title: string, blocks: readonly CfosDocBlock[]): string {
+  const body = cfosBlocksToHtml(blocks);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title || "Untitled document")}</title>
+<style>
+  body { margin: 0; padding: 48px 24px; background: #ffffff; color: #1d1d20; font: 12pt/1.65 Inter, ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 740px; margin: 0 auto; }
+  h1.doc-title { font-size: 28pt; font-weight: 750; line-height: 1.15; letter-spacing: -0.025em; margin: 0 0 18px; }
+  h1 { font-size: 20pt; font-weight: 700; margin: 22px 0 8px; }
+  h2 { font-size: 16pt; font-weight: 650; margin: 18px 0 6px; }
+  h3 { font-size: 13pt; font-weight: 650; margin: 14px 0 4px; }
+  p { margin: 0 0 10px; }
+  blockquote { border-left: 3px solid #e1632e; padding: 2px 0 2px 14px; color: #55555e; margin: 10px 0; }
+  aside[data-works-callout="1"] { border-left: 3px solid #e1632e; background: rgba(225, 99, 46, 0.08); padding: 10px 14px; border-radius: 6px; margin: 12px 0; }
+  aside[data-works-callout="1"] [data-callout-label="1"] { display: block; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.04em; color: #e1632e; margin-bottom: 4px; }
+  pre { background: #f4f4f6; padding: 10px 12px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 10.5pt; white-space: pre-wrap; }
+  code { background: #f4f4f6; padding: 1px 4px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.9em; }
+  hr { border: 0; border-top: 1px solid #d4d4d8; margin: 16px 0; }
+  img { max-width: 100%; height: auto; border-radius: 6px; }
+  a { color: #e1632e; }
+</style>
+</head>
+<body>
+<main>${body}</main>
+</body>
+</html>`;
+}
+
 export function docToMarkdown(title: string, blocks: readonly DocBlock[]): string {
   const lines: string[] = [];
   if (title.trim()) lines.push(`# ${title.trim()}`);
-  for (const b of blocks) {
+  for (const b of visibleWorksDocBlocks(blocks)) {
     if (!b.text.trim()) continue;
     if (b.type === "h2") lines.push(`## ${b.text.trim()}`);
     else if (b.type === "callout") {
