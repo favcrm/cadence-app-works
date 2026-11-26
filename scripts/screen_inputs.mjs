@@ -97,22 +97,25 @@ export const WORKS_OPERATIONS = [
   "works.trash",
   "works.restore",
   "works.request_review",
+  "screen.route.patch",
   "works.review",
   "works.export",
 ];
 
 // The screen declaration is built from the bridge tables, then compared with
-// the closed nine-operation Works inventory. Calls come first, then slots.
+// the closed Works + route operation inventory. Calls come first, then slots.
 export function operationInventory() {
   const source = readFileSync(safePath(root, "src/screen/bridge/operations.ts"), "utf8");
   const table = (name) => {
     const start = source.indexOf(`export const ${name}`);
     const end = source.indexOf("};", start);
-    return [...source.slice(start, end).matchAll(/^\s+"(works\.[a-z_]+)":/gm)].map((m) => m[1]);
+    return [...source.slice(start, end).matchAll(/^\s+"((?:works|screen\.route)\.[a-z_]+)":/gm)].map(
+      (m) => m[1],
+    );
   };
   const operations = [...table("CALL_FIELDS"), ...table("SLOT_FIELDS")];
   if (JSON.stringify(operations) !== JSON.stringify(WORKS_OPERATIONS)) {
-    throw new Error("Closed operation inventory must be exactly the nine works.* operations");
+    throw new Error("Closed operation inventory must match WORKS_OPERATIONS");
   }
   return operations;
 }

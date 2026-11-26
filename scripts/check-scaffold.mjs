@@ -83,11 +83,12 @@ const operations = [
   "works.trash",
   "works.restore",
   "works.request_review",
+  "screen.route.patch",
   "works.review",
   "works.export",
 ];
 if (JSON.stringify([...screens.operations].sort()) !== JSON.stringify([...operations].sort())) {
-  fail("screens operations are not the nine works operations");
+  fail("screens operations do not match the declared Works and route operations");
 }
 if (JSON.stringify(screens.may) !== JSON.stringify(["records.call", "records.slot"])) {
   fail("screens may is not records.call and records.slot");

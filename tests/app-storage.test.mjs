@@ -47,11 +47,12 @@ test("the shipped package passes package integrity and the Works model", () => {
   assert.deepEqual(validateWorksStorage(model), []);
 });
 
-test("the manifest requires app-storage and keeps the nine works operations", () => {
+test("the manifest requires app-storage and keeps the works and route operations", () => {
   const manifest = readFileSync(join(bundle, "app.md"), "utf8");
   assert.match(manifest, /app-storage: \[1\]/);
   const screens = readJson(join(bundle, "screens/works/screens.json"));
   assert.deepEqual([...screens.operations].sort(), [
+    "screen.route.patch",
     "works.create",
     "works.export",
     "works.get",

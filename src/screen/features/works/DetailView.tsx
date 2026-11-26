@@ -1,9 +1,9 @@
-import { ApiError, Button, ConfirmDialog, ErrorNotice, Field, Loading, Notice } from "@cadence/screen-ui";
+import { ApiError, Button, ConfirmDialog, ErrorNotice, Loading, Notice } from "@cadence/screen-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setUnsaved } from "../../bridge/leave";
 import type { DisplayScope } from "../../bridge/scope";
+import { SaveScheduler, type SaveStatus } from "../../cfos/sync/saveScheduler";
 import {
-  numericColumns,
   patchOperations,
   validateDraft,
   validId,
@@ -50,33 +50,49 @@ export function DetailView(props: DetailProps) {
   const [loadFailure, setLoadFailure] = useState<Failure | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState<Content | null>(null);
+  const [resetKey, setResetKey] = useState(0);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [busy, setBusy] = useState<Busy>("load");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [stale, setStale] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const [trashError, setTrashError] = useState<string | null>(null);
+  const [reviewUnsupported, setReviewUnsupported] = useState(false);
+
   const version = useRef(0);
   const owner = useRef(Symbol("works-detail"));
-  const numeric = useRef<boolean[]>([]);
+  const itemRef = useRef<WorksItem | null>(null);
+  const titleRef = useRef("");
+  const contentRef = useRef<Content | null>(null);
+  const schedulerRef = useRef<SaveScheduler | null>(null);
 
-  const adopt = useCallback((next: WorksItem) => {
+  itemRef.current = item;
+  titleRef.current = title;
+  contentRef.current = content;
+
+  const adopt = useCallback((next: WorksItem, resetEditor: boolean) => {
+    itemRef.current = next;
+    titleRef.current = next.title;
+    contentRef.current = next.content;
     setItem(next);
     setTitle(next.title);
     setContent(next.content);
-    numeric.current = numericColumns(next.content);
     version.current += 1;
+    if (resetEditor) setResetKey((k) => k + 1);
   }, []);
 
   const load = useCallback(async () => {
+    schedulerRef.current?.cancel();
     setBusy("load");
     setLoadFailure(null);
     try {
       if (!validId(id)) throw new ApiError("Not found", 404, { code: "not_found" });
       const next = await getItem(scope, id);
-      adopt(next);
+      adopt(next, true);
       setStale(false);
+      setSaveStatus("saved");
       setNotice(null);
     } catch (error) {
       setLoadFailure(classify(error));
@@ -91,18 +107,90 @@ export function DetailView(props: DetailProps) {
 
   const dirty =
     !canvas && item !== null && content !== null && patchOperations(item, title, content).length > 0;
+
   useEffect(() => {
     const token = owner.current;
     setUnsaved(token, dirty);
     return () => setUnsaved(token, false);
   }, [dirty]);
 
-  const message = (failure: Failure): string =>
-    failure.kind === "message"
-      ? t(failure.key)
-      : failure.kind === "unavailable"
-        ? t("error.forbidden")
-        : t("error.generic");
+  const message = useCallback(
+    (failure: Failure): string =>
+      failure.kind === "message"
+        ? t(failure.key)
+        : failure.kind === "unavailable"
+          ? t("error.forbidden")
+          : t("error.generic"),
+    [t],
+  );
+
+  const editing = !canvas && props.canEdit && mode === "edit";
+
+  useEffect(() => {
+    const scheduler = new SaveScheduler({
+      readOnly: !editing || stale,
+      isDirty: () => {
+        const curItem = itemRef.current;
+        const curContent = contentRef.current;
+        if (!curItem || !curContent) return false;
+        return patchOperations(curItem, titleRef.current, curContent).length > 0;
+      },
+      onStatus: (status) => {
+        setSaveStatus(status);
+      },
+      save: async () => {
+        const curItem = itemRef.current;
+        const curContent = contentRef.current;
+        const curTitle = titleRef.current;
+        if (!curItem || !curContent) return "saved";
+        const operations = patchOperations(curItem, curTitle, curContent);
+        if (!operations.length) return "saved";
+        const problem = validateDraft(curTitle, curContent);
+        if (problem) {
+          setNotice({ tone: "error", text: t(PROBLEM_KEY[problem]) });
+          return "pending";
+        }
+        const sent = version.current;
+        try {
+          const next = await patchItem(scope, curItem, operations);
+          if (sent === version.current) adopt(next, false);
+          else {
+            itemRef.current = next;
+            setItem(next);
+          }
+          setNotice(null);
+          return "saved";
+        } catch (error) {
+          const failure = classify(error);
+          if (failure.kind === "stale") {
+            setStale(true);
+            setNotice(null);
+            return "conflict";
+          }
+          if (failure.kind !== "cancelled") {
+            setNotice({ tone: "error", text: message(failure) });
+          }
+          throw error;
+        }
+      },
+    });
+    schedulerRef.current = scheduler;
+    return () => {
+      scheduler.dispose();
+      if (schedulerRef.current === scheduler) schedulerRef.current = null;
+    };
+  }, [editing, stale, scope, adopt, message, t]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (editing && !stale) void schedulerRef.current?.flush();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, stale]);
 
   const run = async (kind: Exclude<Busy, null>, action: () => Promise<void>) => {
     setBusy(kind);
@@ -112,10 +200,12 @@ export function DetailView(props: DetailProps) {
     } catch (error) {
       const failure = classify(error);
       if (failure.kind === "stale") {
-        // A stale revision never overwrites: the screen stops saving and offers a reload.
         setStale(true);
         setNotice(null);
       } else if (failure.kind !== "cancelled") {
+        if (failure.kind === "message" && failure.key === "error.review_unavailable") {
+          setReviewUnsupported(true);
+        }
         setNotice({ tone: "error", text: message(failure) });
       }
     } finally {
@@ -136,11 +226,11 @@ export function DetailView(props: DetailProps) {
   }
   if (!item || !content) return <Loading>{t("detail.loading")}</Loading>;
 
-  const editing = !canvas && props.canEdit && mode === "edit";
   const locked = busy !== null;
 
   const save = () =>
     run("save", async () => {
+      schedulerRef.current?.cancel();
       const problem = validateDraft(title, content);
       if (problem) {
         setNotice({ tone: "error", text: t(PROBLEM_KEY[problem]) });
@@ -148,84 +238,96 @@ export function DetailView(props: DetailProps) {
       }
       const operations = patchOperations(item, title, content);
       if (!operations.length) {
-        setNotice({ tone: "ok", text: t("notice.nothing_to_save") });
+        setSaveStatus("saved");
         return;
       }
       const sent = version.current;
       const next = await patchItem(scope, item, operations);
-      if (sent === version.current) adopt(next);
+      if (sent === version.current) adopt(next, false);
       else setItem(next);
+      setSaveStatus("saved");
       setNotice({ tone: "ok", text: t("notice.saved", { n: next.revision }) });
     });
 
   // Reload replaces the draft with the host copy, so a dirty draft needs an explicit yes.
   const requestReload = () => (dirty ? setConfirmReload(true) : void load());
 
-  const review = item.reviewStatus === "pending" ? (
-    t("detail.review_pending", { n: item.revision })
-  ) : item.reviewStatus === "changes_requested" ? (
-    t("detail.review_changes")
-  ) : item.reviewState === "reviewed" && item.exportState === "ready" ? (
-    t("detail.review_approved", { n: item.revision })
-  ) : item.reviewState === "edited" && item.reviewedRevision > 0 ? (
-    t("detail.review_stale", { a: item.reviewedRevision, c: item.revision })
-  ) : (
-    t("detail.review_none")
-  );
+  const statusText =
+    saveStatus === "saving"
+      ? t("status.saving")
+      : saveStatus === "conflict" || stale
+        ? t("status.conflict")
+        : saveStatus === "offline"
+          ? t("status.offline")
+          : dirty
+            ? t("status.unsaved")
+            : t("status.saved");
+  const statusDot =
+    saveStatus === "saving"
+      ? "saving"
+      : saveStatus === "conflict" || stale
+        ? "conflict"
+        : saveStatus === "offline"
+          ? "offline"
+          : dirty
+            ? "saving"
+            : "saved";
+
+  const showReviewControls = !canvas && !reviewUnsupported;
 
   return (
-    <section className="works-detail">
-      <header className="works-detail-head">
+    <section className="works-detail works-detail-workbench">
+      <header className="works-detail-topbar">
         <div className="works-titlebar">
           {props.showBack ? (
             <Button size="sm" variant="ghost" onClick={props.onBack}>
               {t("action.back")}
             </Button>
           ) : null}
-          <h2 className="text-section works-title" data-outlet-heading>
-            {item.title}
-          </h2>
-        </div>
-        <div className="works-chips">
-          <KindChip kind={item.kind} />
-          <span className="works-rev">{t("detail.revision", { n: item.revision })}</span>
-          <ReviewChip status={item.reviewStatus} state={item.reviewState} />
-        </div>
-        <p className="works-muted">{review}</p>
-        {!canvas ? (
-          <p className="works-muted">
-            {item.exportState === "ready" ? t("detail.export_ready") : t("detail.export_blocked")}
-          </p>
-        ) : null}
-      </header>
-
-      {stale ? (
-        <Notice state="stale">
-          <strong>{t("stale.title")}</strong> {t("stale.body")}{" "}
-          <Button size="sm" variant="primary" disabled={locked} onClick={requestReload}>
-            {t("action.reload")}
-          </Button>
-        </Notice>
-      ) : null}
-      {notice ? (
-        notice.tone === "error" ? (
-          <ErrorNotice>{notice.text}</ErrorNotice>
-        ) : (
-          <Notice>{notice.text}</Notice>
-        )
-      ) : null}
-
-      {!canvas && props.canEdit ? (
-        <div className="works-toolbar">
-          <div className="works-chips" role="group" aria-label={t("detail.mode")}>
-            <Button size="sm" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>
-              {t("action.edit")}
-            </Button>
-            <Button size="sm" aria-pressed={mode === "preview"} onClick={() => setMode("preview")}>
-              {t("action.preview")}
-            </Button>
-          </div>
+          {editing ? (
+            <input
+              className="cfos-title-input"
+              aria-label={t("field.title")}
+              value={title}
+              disabled={stale}
+              onChange={(e) => {
+                const val = e.target.value;
+                titleRef.current = val;
+                setTitle(val);
+                version.current += 1;
+                schedulerRef.current?.schedule();
+              }}
+            />
+          ) : (
+            <h2 className="text-section works-title" data-outlet-heading>
+              {item.title}
+            </h2>
+          )}
           <div className="works-chips">
+            <KindChip kind={item.kind} />
+            <span className="works-rev">{t("detail.revision", { n: item.revision })}</span>
+            {item.reviewStatus !== "none" || item.reviewedRevision > 0 ? (
+              <ReviewChip status={item.reviewStatus} state={item.reviewState} />
+            ) : null}
+            {editing ? (
+              <span className="cfos-status">
+                <span className={`cfos-dot ${statusDot}`} />
+                <span>{statusText}</span>
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {!canvas && props.canEdit ? (
+          <div className="works-chips">
+            <div className="works-chips" role="group" aria-label={t("detail.mode")}>
+              <Button size="sm" aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>
+                {t("action.edit")}
+              </Button>
+              <Button size="sm" aria-pressed={mode === "preview"} onClick={() => setMode("preview")}>
+                {t("action.preview")}
+              </Button>
+            </div>
             <Button
               variant="primary"
               size="sm"
@@ -238,7 +340,7 @@ export function DetailView(props: DetailProps) {
             <Button size="sm" disabled={locked} onClick={requestReload}>
               {t("action.reload")}
             </Button>
-            {props.canRequestReview ? (
+            {showReviewControls && props.canRequestReview && item.reviewStatus === "none" ? (
               <Button
                 size="sm"
                 loading={busy === "request"}
@@ -255,16 +357,16 @@ export function DetailView(props: DetailProps) {
                 {t("action.request_review")}
               </Button>
             ) : null}
-            {props.canReview ? (
+            {showReviewControls && props.canReview && item.reviewStatus === "pending" ? (
               <Button
                 size="sm"
                 loading={busy === "review"}
-                disabled={locked || dirty || stale || item.reviewStatus !== "pending"}
+                disabled={locked || dirty || stale}
                 onClick={() =>
                   void run("review", async () => {
                     await reviewSlot(scope, item);
                     const next = await getItem(scope, item.id);
-                    adopt(next);
+                    adopt(next, true);
                     setNotice({ tone: "ok", text: t("notice.review_recorded") });
                   })
                 }
@@ -272,11 +374,11 @@ export function DetailView(props: DetailProps) {
                 {t("action.review")}
               </Button>
             ) : null}
-            {props.canExport ? (
+            {showReviewControls && props.canExport && item.exportState === "ready" ? (
               <Button
                 size="sm"
                 loading={busy === "export"}
-                disabled={locked || dirty || item.exportState !== "ready"}
+                disabled={locked || dirty}
                 onClick={() =>
                   void run("export", async () => {
                     const receipt = await exportSlot(scope, item);
@@ -300,41 +402,45 @@ export function DetailView(props: DetailProps) {
               </Button>
             ) : null}
           </div>
-        </div>
+        ) : null}
+      </header>
+
+      {stale ? (
+        <Notice state="stale">
+          <strong>{t("stale.title")}</strong> {t("stale.body")}{" "}
+          <Button size="sm" variant="primary" disabled={locked} onClick={requestReload}>
+            {t("action.reload")}
+          </Button>
+        </Notice>
+      ) : null}
+      {notice ? (
+        notice.tone === "error" ? (
+          <ErrorNotice>{notice.text}</ErrorNotice>
+        ) : (
+          <Notice>{notice.text}</Notice>
+        )
       ) : null}
 
       {editing ? (
-        <form
-          className="works-form"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
+        <div className="works-workbench-frame">
           <fieldset className="works-fieldset" disabled={stale}>
-          <Field label={t("field.title")}>
-            {(control) => (
-              <input
-                {...control}
-                className="field"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  version.current += 1;
-                }}
-              />
-            )}
-          </Field>
-          <ContentEditor
-            content={content}
-            numeric={numeric.current}
-            onChange={(next) => { setContent(next); version.current += 1; }}
-          />
+            <ContentEditor
+              title={title}
+              content={content}
+              resetKey={resetKey}
+              onChange={(next) => {
+                contentRef.current = next;
+                setContent(next);
+                version.current += 1;
+                schedulerRef.current?.schedule();
+              }}
+            />
           </fieldset>
-        </form>
+        </div>
       ) : (
-        <ContentView content={content} />
+        <div className="works-workbench-frame">
+          <ContentView title={item.title} content={content} resetKey={resetKey} />
+        </div>
       )}
 
       {confirmReload ? (
@@ -359,7 +465,10 @@ export function DetailView(props: DetailProps) {
           confirmLabel={t("action.trash")}
           pending={busy === "trash"}
           error={trashError}
-          onCancel={() => { setConfirmTrash(false); setTrashError(null); }}
+          onCancel={() => {
+            setConfirmTrash(false);
+            setTrashError(null);
+          }}
           onConfirm={() => {
             setTrashError(null);
             setBusy("trash");

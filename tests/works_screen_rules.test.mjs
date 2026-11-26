@@ -64,3 +64,18 @@ test("reload confirms before dropping edits and a stale editor is read-only", ()
   assert.equal((detail.match(/onClick=\{requestReload\}/g) ?? []).length, 2);
   assert.match(detail, /<fieldset className="works-fieldset" disabled=\{stale\}>/);
 });
+
+test("every bridge verb used by the screen is declared in screens.json", () => {
+  const decl = JSON.parse(read(join(root, "app/screens/works/screens.json")));
+  const declared = new Set(decl.operations);
+  const usedCalls = [
+    ...code.matchAll(/channel\.(?:call|slot)\([^,]+,\s*"([^"]+)"/g),
+  ].map((m) => m[1]);
+  assert.ok(usedCalls.length > 0, "expected bridge calls in screen code");
+  for (const verb of usedCalls) {
+    assert.ok(declared.has(verb), `${verb} missing from app/screens/works/screens.json`);
+  }
+  if (/\bpatchRoute\b/.test(code)) {
+    assert.ok(declared.has("screen.route.patch"), "screen.route.patch missing from screens.json");
+  }
+});
