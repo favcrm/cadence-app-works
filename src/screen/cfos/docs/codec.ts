@@ -517,6 +517,22 @@ function cfosBlockToFallbackWorksBlock(block: CfosDocBlock): DocBlock | null {
     const text = (htmlToMarkdown(inner) || stripTagsToText(inner)).replace(/^#{1,6}\s+/, "").trim();
     return text ? { type: "h2", text } : null;
   }
+  if (/^<table\b/i.test(html)) {
+    const trMatches = html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
+    const lines: string[] = [];
+    for (let i = 0; i < trMatches.length; ++i) {
+      const cells = [...trMatches[i].matchAll(/<(t[hd])\b[^>]*>([\s\S]*?)<\/\1>/gi)].map((m) =>
+        stripTagsToText(m[2]).replace(/\s+/g, " ").replace(/\|/g, "\\|").trim(),
+      );
+      if (!cells.length) continue;
+      lines.push(`| ${cells.join(" | ")} |`);
+      if (i === 0 && trMatches.length > 1) {
+        lines.push(`| ${cells.map(() => "---").join(" | ")} |`);
+      }
+    }
+    if (lines.length) return { type: "p", text: lines.join("\n") };
+    return null;
+  }
   const md = htmlToMarkdown(html).trim() || stripTagsToText(html);
   if (md) return { type: "p", text: md };
   if (/<img\b/i.test(html)) return { type: "p", text: "[Image]" };
@@ -525,7 +541,7 @@ function cfosBlockToFallbackWorksBlock(block: CfosDocBlock): DocBlock | null {
 
 function hasRichDocFormatting(blocks: readonly CfosDocBlock[]): boolean {
   return blocks.some((b) =>
-    /<(?:h1|h3|blockquote|pre|hr|img|u|s|del|font|ul|ol|a|code)\b|style=|class="doc-title"|text-align/i.test(
+    /<(?:h1|h3|blockquote|pre|hr|img|u|s|del|font|ul|ol|a|code|table)\b|style=|class="doc-title"|text-align/i.test(
       b.html,
     ),
   );

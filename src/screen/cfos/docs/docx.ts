@@ -534,11 +534,49 @@ function renderListItems(listHtml: string, ordered: boolean, ctx: DocxCtx): stri
   return items.join("");
 }
 
+function renderTableXml(tableHtml: string, ctx: DocxCtx): string {
+  const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  const rows: string[] = [];
+  let rm: RegExpExecArray | null;
+  while ((rm = trRe.exec(tableHtml)) !== null) {
+    const cellRe = /<(t[hd])\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+    const cells: string[] = [];
+    let isHeaderRow = false;
+    let cm: RegExpExecArray | null;
+    while ((cm = cellRe.exec(rm[1])) !== null) {
+      const isHeader = cm[1].toLowerCase() === "th";
+      if (isHeader) isHeaderRow = true;
+      const runs = renderInlineRuns(cm[3], isHeader ? { b: true } : {}, ctx);
+      const jc = paragraphAlignXml(cm[2]);
+      const pPr = jc ? `<w:pPr>${jc}<w:spacing w:after="60"/></w:pPr>` : '<w:pPr><w:spacing w:after="60"/></w:pPr>';
+      const shd = isHeader ? '<w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/>' : "";
+      cells.push(
+        `<w:tc><w:tcPr>${shd}<w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar></w:tcPr><w:p>${pPr}${runs}</w:p></w:tc>`,
+      );
+    }
+    if (cells.length) {
+      rows.push(`<w:tr>${isHeaderRow ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}${cells.join("")}</w:tr>`);
+    }
+  }
+  if (!rows.length) return "";
+  const borders =
+    '<w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="D1D5DB"/>' +
+    '<w:left w:val="single" w:sz="4" w:space="0" w:color="D1D5DB"/>' +
+    '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="D1D5DB"/>' +
+    '<w:right w:val="single" w:sz="4" w:space="0" w:color="D1D5DB"/>' +
+    '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="E5E7EB"/>' +
+    '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="E5E7EB"/></w:tblBorders>';
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${borders}</w:tblPr>${rows.join("")}</w:tbl>`;
+}
+
 function renderBlockXml(rawHtml: string, ctx: DocxCtx): string {
   const html = rawHtml.trim();
   if (!html) return "";
   if (/^<hr\b/i.test(html)) {
     return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="4" w:color="D6D3D1"/></w:pBdr></w:pPr></w:p>';
+  }
+  if (/^<table\b/i.test(html)) {
+    return renderTableXml(html, ctx);
   }
   const listM = /^<(ul|ol)\b[^>]*>([\s\S]*)<\/\1>$/i.exec(html);
   if (listM) {

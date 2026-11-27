@@ -5,7 +5,7 @@ import type { Kind } from "../../bridge/operations";
 import { patchRoute } from "../../bridge/route";
 import { scopeError, useCanvasReadOnly, useScope } from "../../bridge/scope";
 import { starterDraft } from "../../cfos/labels";
-import { ImportError, importFileToWorksDraft } from "../../cfos/import/ooxml";
+import { ImportError, importFileToWorksDraft, type ImportWarningCode } from "../../cfos/import/ooxml";
 import { kindSection, sectionKind, validateDraft, type WorksRow } from "../../domain/works";
 import { classify, createItem, restoreItem } from "./api";
 import { DetailView } from "./DetailView";
@@ -32,6 +32,23 @@ export default function WorksScreen() {
   );
 }
 
+function importWarningKey(code: ImportWarningCode) {
+  switch (code) {
+    case "simplified_doc":
+      return "import.warning_simplified_doc" as const;
+    case "truncated_doc":
+      return "import.warning_truncated_doc" as const;
+    case "kept_first_sheet":
+      return "import.warning_kept_first_sheet" as const;
+    case "truncated_sheet":
+      return "import.warning_truncated_sheet" as const;
+    case "simplified_deck":
+      return "import.warning_simplified_deck" as const;
+    case "truncated_deck":
+      return "import.warning_truncated_deck" as const;
+  }
+}
+
 type Trashed = { id: string; title: string; revision: number };
 
 function Mounted() {
@@ -44,6 +61,7 @@ function Mounted() {
   const [navFailure, setNavFailure] = useState<string | null>(null);
   const [creatingKind, setCreatingKind] = useState<Kind | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importNotice, setImportNotice] = useState<{ itemId: string; codes: ImportWarningCode[] } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -101,6 +119,7 @@ function Mounted() {
   const handleImportFile = async (file: File) => {
     if (importing || creatingKind !== null || canvas) return;
     setNavFailure(null);
+    setImportNotice(null);
     setImporting(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -111,6 +130,9 @@ function Mounted() {
         return;
       }
       const item = await createItem(scope, draft.kind, draft.title, draft.content);
+      if (draft.warningCodes.length > 0) {
+        setImportNotice({ itemId: item.id, codes: draft.warningCodes });
+      }
       setRefreshKey((n) => n + 1);
       await withoutLeaveWarning(() =>
         patchRoute({ section: kindSection(item.kind), view: "list", record_id: item.id }),
@@ -159,6 +181,8 @@ function Mounted() {
         <NewView
           scope={scope}
           initialKind={kind ?? "doc"}
+          importing={importing}
+          onImportFile={(file) => void handleImportFile(file)}
           onCancel={goList}
           onCreated={(item) => {
             setRefreshKey((n) => n + 1);
@@ -182,8 +206,18 @@ function Mounted() {
           canExport={can("works.export")}
           canTrash={can("works.trash")}
           showBack={!(canvas && route.params.id)}
-          onBack={goList}
+          importWarnings={
+            importNotice && importNotice.itemId === openId
+              ? importNotice.codes.map((code) => t(importWarningKey(code)))
+              : undefined
+          }
+          onDismissImportWarnings={() => setImportNotice(null)}
+          onBack={() => {
+            setImportNotice(null);
+            goList();
+          }}
           onTrashed={(next) => {
+            setImportNotice(null);
             setTrashed(next);
             setRestoreFailure(null);
             setRefreshKey((n) => n + 1);

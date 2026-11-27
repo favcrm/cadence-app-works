@@ -1,5 +1,5 @@
 import { Button, DataTable, EmptyState, ErrorNotice, Loading, Select } from "@cadence/screen-ui";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import type { Kind } from "../../bridge/operations";
 import type { DisplayScope } from "../../bridge/scope";
 import type { WorksRow } from "../../domain/works";
@@ -36,6 +36,8 @@ export function ListView({
 }: ListProps) {
   const { t } = useLocale();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0);
+  const [dragOver, setDragOver] = useState(false);
   const [rows, setRows] = useState<WorksRow[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [draft, setDraft] = useState("");
@@ -84,14 +86,52 @@ export function ListView({
 
   const busy = creatingKind !== null || importing;
 
+  const canImport = !canvas && canCreate;
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (file) onImportFile(file);
   };
 
+  const handleDragEnter = (event: DragEvent) => {
+    if (!canImport || !event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragOver(true);
+  };
+
+  const handleDragOver = (event: DragEvent) => {
+    if (!canImport || !event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDragLeave = (event: DragEvent) => {
+    if (!canImport) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragOver(false);
+  };
+
+  const handleDrop = (event: DragEvent) => {
+    if (!canImport) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragOver(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) onImportFile(file);
+  };
+
   return (
-    <section className="works-list">
+    <section
+      className={`works-list${dragOver ? " is-drag-over" : ""}`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragOver ? <div className="works-import-dropbanner">{t("import.drop_hint")}</div> : null}
       <div className="works-toolbar">
         <form className="works-search" role="search" onSubmit={submit}>
           <input

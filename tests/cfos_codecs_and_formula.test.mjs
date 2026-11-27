@@ -649,3 +649,126 @@ test("xlsx, csv, and markdown importers produce valid Works drafts and reject un
     (e) => e instanceof ImportError && e.code === "encrypted",
   );
 });
+
+test("import polish: core.xml titles, Word tables round-trip, empty shared formulas, slide numbers, and truncation warningCodes", async () => {
+  const tableBlocks = [
+    { id: "b_1", html: "<h2>Quarterly Summary</h2>" },
+    {
+      id: "b_2",
+      html: "<table><tbody><tr><th>Region</th><th>ARR</th></tr><tr><td>APAC</td><td>$120k</td></tr></tbody></table>",
+    },
+  ];
+  const docxBytes = await buildDocxBytes("Q4 營運報告", tableBlocks);
+  const importedDoc = await importFileToWorksDraft("renamed-file.docx", docxBytes);
+  assert.equal(importedDoc.title, "Q4 營運報告");
+  assert.equal(validateDraft(importedDoc.title, importedDoc.content), null);
+  const restored = worksDocToCfos(importedDoc.content.blocks);
+  assert.ok(restored.some((b) => b.html.includes("<table") && b.html.includes("APAC") && b.html.includes("$120k")));
+
+  // Synthetic XLSX with <dc:title> and an empty shared formula <f t="shared" si="0"/> falling back to cached <v>
+  const { buildZipBytes: _unused } = {};
+  const enc = new TextEncoder();
+  const buildStoredZip = (files) => {
+    const parts = [];
+    const cd = [];
+    let offset = 0;
+    for (const [name, data] of files) {
+      const nb = enc.encode(name);
+      const db = enc.encode(data);
+      const lfh = new Uint8Array(30 + nb.length);
+      const lv = new DataView(lfh.buffer);
+      lv.setUint32(0, 0x04034b50, true);
+      lv.setUint16(4, 20, true);
+      lv.setUint16(26, nb.length, true);
+      lfh.set(nb, 30);
+      parts.push(lfh, db);
+      const cdh = new Uint8Array(46 + nb.length);
+      const cv = new DataView(cdh.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint32(20, db.length, true);
+      cv.setUint32(24, db.length, true);
+      cv.setUint16(28, nb.length, true);
+      cv.setUint32(42, offset, true);
+      cdh.set(nb, 46);
+      cd.push(cdh);
+      offset += lfh.length + db.length;
+    }
+    const cdSize = cd.reduce((s, b) => s + b.length, 0);
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, files.length, true);
+    ev.setUint16(10, files.length, true);
+    ev.setUint32(12, cdSize, true);
+    ev.setUint32(16, offset, true);
+    const total = offset + cdSize + 22;
+    const out = new Uint8Array(total);
+    let p = 0;
+    for (const chunk of [...parts, ...cd, eocd]) {
+      out.set(chunk, p);
+      p += chunk.length;
+    }
+    return out;
+  };
+
+  const xlsxZip = buildStoredZip([
+    [
+      "docProps/core.xml",
+      '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Board Budget 2027</dc:title></cp:coreProperties>',
+    ],
+    [
+      "xl/workbook.xml",
+      '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Main" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    ],
+    [
+      "xl/_rels/workbook.xml.rels",
+      '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+    ],
+    [
+      "xl/worksheets/sheet1.xml",
+      '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Item</t></is></c><c r="B1" t="inlineStr"><is><t>Total</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>Cloud</t></is></c><c r="B2"><f t="shared" si="0"/><v>420</v></c></row></sheetData></worksheet>',
+    ],
+  ]);
+  const importedXlsx = await importFileToWorksDraft("random-name.xlsx", xlsxZip);
+  assert.equal(importedXlsx.title, "Board Budget 2027");
+  assert.equal(importedXlsx.content.rows[1][1], 420);
+
+  // Synthetic PPTX verifying <dc:title> and sldNum filtering inside notesSlide
+  const pptxZip = buildStoredZip([
+    [
+      "docProps/core.xml",
+      '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Keynote Deck</dc:title></cp:coreProperties>',
+    ],
+    [
+      "ppt/presentation.xml",
+      '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst></p:presentation>',
+    ],
+    [
+      "ppt/_rels/presentation.xml.rels",
+      '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>',
+    ],
+    [
+      "ppt/slides/slide1.xml",
+      '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>Welcome</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>',
+    ],
+    [
+      "ppt/slides/_rels/slide1.xml.rels",
+      '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide1.xml"/></Relationships>',
+    ],
+    [
+      "ppt/notesSlides/notesSlide1.xml",
+      '<p:notes xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:nvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>Keep note clean</a:t></a:r></a:p></p:txBody></p:sp><p:sp><p:nvSpPr><p:nvPr><p:ph type="sldNum" idx="10"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>1</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:notes>',
+    ],
+  ]);
+  const importedPptx = await importFileToWorksDraft("deck-abc.pptx", pptxZip);
+  assert.equal(importedPptx.title, "Keynote Deck");
+  const rawNote = (importedPptx.content.slides[0].notes ?? "").split("\n---cfos-slide-v1---\n")[0];
+  assert.equal(rawNote, "Keep note clean");
+
+  // Truncation warningCodes
+  const hugeMd = Array.from({ length: 1200 }, (_, i) => `Paragraph ${i} ` + "x".repeat(80)).join("\n\n");
+  const bigDraft = await importFileToWorksDraft("big.md", enc.encode(hugeMd));
+  assert.ok(bigDraft.warningCodes.includes("truncated_doc"));
+});

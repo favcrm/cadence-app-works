@@ -39,6 +39,8 @@ export interface DetailProps {
   canExport: boolean;
   canTrash: boolean;
   showBack: boolean;
+  importWarnings?: readonly string[];
+  onDismissImportWarnings?: () => void;
   onBack: () => void;
   onTrashed: (trashed: { id: string; title: string; revision: number }) => void;
 }
@@ -411,6 +413,16 @@ export function DetailView(props: DetailProps) {
           <Button size="sm" variant="primary" disabled={locked} onClick={requestReload}>
             {t("action.reload")}
           </Button>
+        </Notice>
+      ) : null}
+      {props.importWarnings && props.importWarnings.length > 0 ? (
+        <Notice state="warn">
+          {props.importWarnings.join(" ")}{" "}
+          {props.onDismissImportWarnings ? (
+            <Button size="sm" variant="ghost" onClick={props.onDismissImportWarnings}>
+              {t("action.dismiss")}
+            </Button>
+          ) : null}
         </Notice>
       ) : null}
       {notice ? (
