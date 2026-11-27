@@ -1675,6 +1675,59 @@ table.cfos-grid td {
   }
 }
 
+.cfos-doc-editor {
+  outline: none;
+}
+
+.cfos-doc-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 0.9375rem;
+}
+
+.cfos-doc-editor th,
+.cfos-doc-editor td {
+  border: 1px solid var(--color-ink-700);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.cfos-doc-editor th {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-ink-700) 25%, transparent);
+}
+
+.works-list.is-drag-over {
+  outline: 2px dashed var(--color-accent, #f6821f);
+  outline-offset: 6px;
+  border-radius: 10px;
+}
+
+.works-import-dropbanner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px dashed var(--color-accent, #f6821f);
+  color: var(--color-ink-100);
+  font-size: var(--text-secondary);
+}
+
+.works-import-dropzone {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 24px;
+  border-radius: 10px;
+  border: 1px dashed var(--color-ink-700);
+  background: transparent;
+}
+
+.works-import-dropzone.is-drag-over {
+  border-color: var(--color-accent, #f6821f);
+}
+
 @container (max-width: 48rem) {
   .works-search {
     max-width: none;

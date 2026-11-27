@@ -17,6 +17,7 @@ export const messages = {
   "action.back": { en: "Back to Works", "zh-TW": "返回列表" },
   "action.new": { en: "New", "zh-TW": "新增" },
   "action.import": { en: "Import", "zh-TW": "匯入" },
+  "action.dismiss": { en: "Dismiss", "zh-TW": "關閉提示" },
   "action.new_doc": { en: "+ Doc", "zh-TW": "+ 文件" },
   "action.new_sheet": { en: "+ Sheet", "zh-TW": "+ 試算表" },
   "action.new_deck": { en: "+ Deck", "zh-TW": "+ 簡報" },
@@ -177,6 +178,39 @@ export const messages = {
     "zh-TW": "此工作區尚未支援審閱與匯出。",
   },
   "import.busy": { en: "Importing…", "zh-TW": "正在匯入…" },
+  "import.drop_hint": {
+    en: "Drop a .docx, .xlsx, .pptx, .csv, .md, or .txt file to import it into Works",
+    "zh-TW": "放開滑鼠即可匯入 .docx、.xlsx、.pptx、.csv、.md 或 .txt 檔案至文件工作台",
+  },
+  "import.view_body": {
+    en: "Choose or drop a .docx, .xlsx, .pptx, .csv, .md, or .txt file (up to 10 MiB).",
+    "zh-TW": "選擇或拖放 .docx、.xlsx、.pptx、.csv、.md 或 .txt 檔案（上限 10 MiB）。",
+  },
+  "import.choose_file": { en: "Choose file", "zh-TW": "選擇檔案" },
+  "import.warning_simplified_doc": {
+    en: "Some rich Word formatting was simplified to fit the 64 KiB workspace document limit.",
+    "zh-TW": "為符合工作區 64 KiB 文件上限，部分進階 Word 格式已簡化。",
+  },
+  "import.warning_truncated_doc": {
+    en: "The imported document was truncated to fit the 64 KiB workspace document limit.",
+    "zh-TW": "匯入的文件已截斷以符合工作區 64 KiB 上限。",
+  },
+  "import.warning_kept_first_sheet": {
+    en: "Only the first worksheet was kept to fit the 64 KiB workspace sheet limit.",
+    "zh-TW": "為符合工作區 64 KiB 上限，僅保留第一個工作表。",
+  },
+  "import.warning_truncated_sheet": {
+    en: "Rows in this spreadsheet were truncated to fit the 64 KiB workspace sheet limit.",
+    "zh-TW": "為符合工作區 64 KiB 上限，試算表部分資料列已截斷。",
+  },
+  "import.warning_simplified_deck": {
+    en: "Some slide layout metadata was simplified to fit the 64 KiB workspace deck limit.",
+    "zh-TW": "為符合工作區 64 KiB 上限，部分投影片版面中繼資料已簡化。",
+  },
+  "import.warning_truncated_deck": {
+    en: "Trailing slides were truncated to fit the 64 KiB workspace deck limit.",
+    "zh-TW": "為符合工作區 64 KiB 上限，較後方的投影片已截斷。",
+  },
   "import.error_generic": {
     en: "Could not import this file. Check that it is a valid Word, Excel, PowerPoint, CSV, or Markdown file.",
     "zh-TW": "無法匯入此檔案，請確認為有效的 Word、Excel、PowerPoint、CSV 或 Markdown 檔案。",

@@ -25,11 +25,20 @@ export class ImportError extends Error {
   }
 }
 
+export type ImportWarningCode =
+  | "simplified_doc"
+  | "truncated_doc"
+  | "kept_first_sheet"
+  | "truncated_sheet"
+  | "simplified_deck"
+  | "truncated_deck";
+
 export interface ImportedWorksDraft {
   kind: "doc" | "sheet" | "deck";
   title: string;
   content: Content;
   warnings: string[];
+  warningCodes: ImportWarningCode[];
 }
 
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
@@ -355,29 +364,154 @@ function docxRunHtml(runXml: string, nextBlockId: { id: number }): { html: strin
   return { html, text: plain };
 }
 
+function corePropTitle(entries: Map<string, Uint8Array>, fallback: string): string {
+  const coreXml = readXmlEntry(entries, "docProps/core.xml");
+  const coreTitleMatch = coreXml ? /<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i.exec(coreXml) : null;
+  const decoded = coreTitleMatch ? decodeXmlEntities(coreTitleMatch[1]) : "";
+  return clampTitle(decoded || fallback, fallback);
+}
+
+function extractBodyBlocks(bodyXml: string): Array<{ tag: "w:p" | "w:tbl"; inner: string }> {
+  const out: Array<{ tag: "w:p" | "w:tbl"; inner: string }> = [];
+  const openRe = /<(w:p|w:tbl)(\s[^>]*)?(\/?)>/g;
+  let m: RegExpExecArray | null;
+  while ((m = openRe.exec(bodyXml)) !== null) {
+    const tag = m[1] as "w:p" | "w:tbl";
+    if (m[3] === "/") continue;
+    const startInner = m.index + m[0].length;
+    const tagRe = new RegExp(`<(/?)${tag}\\b[^>]*>`, "g");
+    tagRe.lastIndex = startInner;
+    let depth = 1;
+    let endInner = bodyXml.length;
+    let tm: RegExpExecArray | null;
+    while ((tm = tagRe.exec(bodyXml)) !== null) {
+      if (tm[1] === "/") {
+        depth--;
+        if (depth === 0) {
+          endInner = tm.index;
+          break;
+        }
+      } else if (!tm[0].endsWith("/>")) {
+        depth++;
+      }
+    }
+    out.push({ tag, inner: bodyXml.slice(startInner, endInner) });
+    openRe.lastIndex = tagRe.lastIndex > startInner ? tagRe.lastIndex : bodyXml.length;
+  }
+  return out;
+}
+
+function extractParaFragments(
+  paraInner: string,
+  rels: Map<string, { type: string; target: string }>,
+  blockCounter: { id: number },
+): { innerHtml: string; plainText: string; hasRich: boolean } {
+  const htmlFrags: string[] = [];
+  const textFrags: string[] = [];
+  let hasRich = false;
+
+  const childRe = /<w:hyperlink\b([^>]*)>([\s\S]*?)<\/w:hyperlink>|<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g;
+  let cm: RegExpExecArray | null;
+  while ((cm = childRe.exec(paraInner)) !== null) {
+    if (cm[2] !== undefined) {
+      const rid = xmlAttr(cm[1], "r:id");
+      const href = rels.get(rid)?.target ?? "";
+      const safeHref = /^https?:\/\//i.test(href) ? href : "";
+      const linkHtml: string[] = [];
+      const linkText: string[] = [];
+      for (const r of matchElements(cm[2], "w:r")) {
+        const piece = docxRunHtml(r.inner, blockCounter);
+        linkHtml.push(piece.html);
+        linkText.push(piece.text);
+      }
+      const joinedText = linkText.join("");
+      const joinedHtml = linkHtml.join("");
+      if (safeHref && joinedHtml) {
+        hasRich = true;
+        htmlFrags.push(`<a href="${escapeHtml(safeHref)}">${joinedHtml}</a>`);
+        textFrags.push(`[${joinedText}](${safeHref})`);
+      } else if (joinedText) {
+        htmlFrags.push(joinedHtml || escapeHtml(joinedText));
+        textFrags.push(joinedText);
+      }
+    } else if (cm[3] !== undefined) {
+      const piece = docxRunHtml(cm[3], blockCounter);
+      if (piece.text) {
+        if (piece.html !== escapeHtml(piece.text).replace(/\n/g, "<br>")) hasRich = true;
+        htmlFrags.push(piece.html);
+        textFrags.push(piece.text);
+      }
+    }
+  }
+  return { innerHtml: htmlFrags.join(""), plainText: textFrags.join("").trim(), hasRich };
+}
+
 async function importDocx(fileName: string, entries: Map<string, Uint8Array>): Promise<ImportedWorksDraft> {
   const docXml = readXmlEntry(entries, "word/document.xml");
   if (!docXml) {
     throw new ImportError("malformed", "Not a valid DOCX file: word/document.xml is missing.");
   }
-  const coreXml = readXmlEntry(entries, "docProps/core.xml");
-  const coreTitleMatch = coreXml ? /<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i.exec(coreXml) : null;
-  const title = clampTitle(
-    coreTitleMatch ? decodeXmlEntities(coreTitleMatch[1]) : titleFromFileName(fileName, "Imported doc"),
-    titleFromFileName(fileName, "Imported doc"),
-  );
+  const title = corePropTitle(entries, titleFromFileName(fileName, "Imported doc"));
   const rels = parseRelsMap(readXmlEntry(entries, "word/_rels/document.xml.rels"));
 
   const blocks: DocBlock[] = [];
   const cfosBlocks: { id: string; html: string }[] = [];
   const warnings: string[] = [];
+  const warningCodes: ImportWarningCode[] = [];
   let hasRich = false;
 
   const bodyInner = matchElements(docXml, "w:body")[0]?.inner ?? docXml;
   const blockCounter = { id: 1 };
 
-  for (const para of matchElements(bodyInner, "w:p")) {
-    const pPr = matchElements(para.inner, "w:pPr")[0]?.inner ?? "";
+  for (const node of extractBodyBlocks(bodyInner)) {
+    if (node.tag === "w:tbl") {
+      const trs = matchElements(node.inner, "w:tr");
+      const parsedRows: { isHeader: boolean; cells: { html: string; text: string }[] }[] = [];
+      for (let rIdx = 0; rIdx < trs.length; ++rIdx) {
+        const tr = trs[rIdx];
+        const explicitHeader = /<w:tblHeader\b/i.test(tr.inner);
+        const tcs = matchElements(tr.inner, "w:tc");
+        const cells: { html: string; text: string }[] = [];
+        for (const tc of tcs) {
+          const cellHtml: string[] = [];
+          const cellText: string[] = [];
+          for (const cp of matchElements(tc.inner, "w:p")) {
+            const frag = extractParaFragments(cp.inner, rels, blockCounter);
+            if (frag.plainText) {
+              cellHtml.push(frag.innerHtml);
+              cellText.push(frag.plainText);
+            }
+          }
+          cells.push({
+            html: cellHtml.join("<br>"),
+            text: cellText.join(" / ").replace(/\|/g, "\\|").trim(),
+          });
+        }
+        if (cells.length) parsedRows.push({ isHeader: explicitHeader || (rIdx === 0 && trs.length >= 2), cells });
+      }
+      if (!parsedRows.length) continue;
+      hasRich = true;
+      const id = `b_${blockCounter.id++}`;
+      const rowsHtml = parsedRows
+        .map((row) => {
+          const cellTag = row.isHeader ? "th" : "td";
+          return `<tr>${row.cells.map((c) => `<${cellTag}>${c.html}</${cellTag}>`).join("")}</tr>`;
+        })
+        .join("");
+      cfosBlocks.push({ id, html: `<table data-block-id="${id}"><tbody>${rowsHtml}</tbody></table>` });
+      const mdLines: string[] = [];
+      for (let rIdx = 0; rIdx < parsedRows.length; ++rIdx) {
+        const row = parsedRows[rIdx];
+        mdLines.push(`| ${row.cells.map((c) => c.text || " ").join(" | ")} |`);
+        if (rIdx === 0 && parsedRows.length > 1) {
+          mdLines.push(`| ${row.cells.map(() => "---").join(" | ")} |`);
+        }
+      }
+      blocks.push({ type: "p", text: mdLines.join("\n") });
+      continue;
+    }
+
+    const pPr = matchElements(node.inner, "w:pPr")[0]?.inner ?? "";
     const styleMatch = /<w:pStyle\b([^>]*)\/?>/i.exec(pPr);
     const styleVal = styleMatch ? xmlAttr(styleMatch[1], "w:val").toLowerCase() : "";
     const isList = /<w:numPr\b/i.test(pPr);
@@ -385,65 +519,29 @@ async function importDocx(fileName: string, entries: Map<string, Uint8Array>): P
     const isHeading2 = /^heading\s*2$/i.test(styleVal) || styleVal === "heading2";
     const isHeading3 = /^heading\s*[3-6]$/i.test(styleVal) || /^heading[3-6]$/.test(styleVal);
 
-    const htmlFrags: string[] = [];
-    const textFrags: string[] = [];
-
-    const childRe = /<w:hyperlink\b([^>]*)>([\s\S]*?)<\/w:hyperlink>|<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g;
-    let cm: RegExpExecArray | null;
-    while ((cm = childRe.exec(para.inner)) !== null) {
-      if (cm[2] !== undefined) {
-        const rid = xmlAttr(cm[1], "r:id");
-        const href = rels.get(rid)?.target ?? "";
-        const safeHref = /^https?:\/\//i.test(href) ? href : "";
-        const linkHtml: string[] = [];
-        const linkText: string[] = [];
-        for (const r of matchElements(cm[2], "w:r")) {
-          const piece = docxRunHtml(r.inner, blockCounter);
-          linkHtml.push(piece.html);
-          linkText.push(piece.text);
-        }
-        const joinedText = linkText.join("");
-        const joinedHtml = linkHtml.join("");
-        if (safeHref && joinedHtml) {
-          hasRich = true;
-          htmlFrags.push(`<a href="${escapeHtml(safeHref)}">${joinedHtml}</a>`);
-          textFrags.push(`[${joinedText}](${safeHref})`);
-        } else if (joinedText) {
-          htmlFrags.push(joinedHtml || escapeHtml(joinedText));
-          textFrags.push(joinedText);
-        }
-      } else if (cm[3] !== undefined) {
-        const piece = docxRunHtml(cm[3], blockCounter);
-        if (piece.text) {
-          if (piece.html !== escapeHtml(piece.text).replace(/\n/g, "<br>")) hasRich = true;
-          htmlFrags.push(piece.html);
-          textFrags.push(piece.text);
-        }
-      }
-    }
-
-    const plainText = textFrags.join("").trim();
-    if (!plainText) continue;
+    const frag = extractParaFragments(node.inner, rels, blockCounter);
+    if (!frag.plainText) continue;
+    if (frag.hasRich) hasRich = true;
 
     const id = `b_${blockCounter.id++}`;
-    const innerHtml = htmlFrags.join("");
+    const innerHtml = frag.innerHtml;
     if (isHeading1) {
       hasRich = true;
-      blocks.push({ type: "h2", text: plainText });
+      blocks.push({ type: "h2", text: frag.plainText });
       cfosBlocks.push({ id, html: `<h1 data-block-id="${id}">${innerHtml}</h1>` });
     } else if (isHeading2) {
-      blocks.push({ type: "h2", text: plainText });
+      blocks.push({ type: "h2", text: frag.plainText });
       cfosBlocks.push({ id, html: `<h2 data-block-id="${id}">${innerHtml}</h2>` });
     } else if (isHeading3) {
       hasRich = true;
-      blocks.push({ type: "h2", text: plainText });
+      blocks.push({ type: "h2", text: frag.plainText });
       cfosBlocks.push({ id, html: `<h3 data-block-id="${id}">${innerHtml}</h3>` });
     } else if (isList) {
       hasRich = true;
-      blocks.push({ type: "p", text: `- ${plainText}` });
+      blocks.push({ type: "p", text: `- ${frag.plainText}` });
       cfosBlocks.push({ id, html: `<ul data-block-id="${id}"><li>${innerHtml}</li></ul>` });
     } else {
-      blocks.push({ type: "p", text: plainText });
+      blocks.push({ type: "p", text: frag.plainText });
       cfosBlocks.push({ id, html: `<p data-block-id="${id}">${innerHtml}</p>` });
     }
   }
@@ -468,22 +566,30 @@ async function importDocx(fileName: string, entries: Map<string, Uint8Array>): P
   let candidate = fitBlocks(blocks, hasRich);
   if (byteLen(JSON.stringify({ blocks: candidate })) > MAX_WORKS_CONTENT_BYTES) {
     candidate = fitBlocks(blocks, false);
-    if (hasRich) warnings.push("Simplified formatting to fit workspace document size limit.");
+    if (hasRich) {
+      warningCodes.push("simplified_doc");
+      warnings.push("Simplified formatting to fit workspace document size limit.");
+    }
   }
   while (
     candidate.length > 1 &&
     byteLen(JSON.stringify({ blocks: candidate })) > MAX_WORKS_CONTENT_BYTES
   ) {
     candidate = candidate.slice(0, Math.max(1, Math.floor(candidate.length * 0.8)));
-    if (!warnings.some((w) => w.includes("truncated"))) {
+    if (!warningCodes.includes("truncated_doc")) {
+      warningCodes.push("truncated_doc");
       warnings.push("Document was truncated to fit workspace 64 KiB limit.");
     }
   }
   if (byteLen(JSON.stringify({ blocks: candidate })) > MAX_WORKS_CONTENT_BYTES) {
     candidate = [{ type: "p", text: candidate[0].text.slice(0, 12000) || " " }];
+    if (!warningCodes.includes("truncated_doc")) {
+      warningCodes.push("truncated_doc");
+      warnings.push("Document was truncated to fit workspace 64 KiB limit.");
+    }
   }
 
-  return { kind: "doc", title, content: { kind: "doc", blocks: candidate }, warnings };
+  return { kind: "doc", title, content: { kind: "doc", blocks: candidate }, warnings, warningCodes };
 }
 
 // ---- XLSX importer ------------------------------------------------------
@@ -575,16 +681,19 @@ async function importXlsx(fileName: string, entries: Map<string, Uint8Array>): P
 
       let text = "";
       if (fMatch) {
-        const expr = decodeXmlEntities(fMatch[1]).replace(/^_xlfn\./gi, "");
-        text = expr.startsWith("=") ? expr : `=${expr}`;
-      } else if (t === "s" && vMatch) {
-        text = sharedStrings[Number(vMatch[1])] ?? "";
-      } else if (t === "inlineStr" && isMatch) {
-        text = decodeXmlEntities(isMatch[1]);
-      } else if (t === "b" && vMatch) {
-        text = vMatch[1].trim() === "1" ? "TRUE" : "FALSE";
-      } else if (vMatch) {
-        text = decodeXmlEntities(vMatch[1]);
+        const expr = decodeXmlEntities(fMatch[1]).replace(/^_xlfn\./gi, "").trim();
+        if (expr) text = expr.startsWith("=") ? expr : `=${expr}`;
+      }
+      if (!text) {
+        if (t === "s" && vMatch) {
+          text = sharedStrings[Number(vMatch[1])] ?? "";
+        } else if (t === "inlineStr" && isMatch) {
+          text = decodeXmlEntities(isMatch[1]);
+        } else if (t === "b" && vMatch) {
+          text = vMatch[1].trim() === "1" ? "TRUE" : "FALSE";
+        } else if (vMatch) {
+          text = decodeXmlEntities(vMatch[1]);
+        }
       }
       if (!text) continue;
       const normalizedRef = `${colLetter(rc.c)}${rc.r + 1}`;
@@ -616,6 +725,7 @@ async function importXlsx(fileName: string, entries: Map<string, Uint8Array>): P
   }
 
   const warnings: string[] = [];
+  const warningCodes: ImportWarningCode[] = [];
   const sidecarWb = {
     sheetOrder: sheetsMeta.map((s) => s.id),
     sheets: cfosSheets,
@@ -627,24 +737,29 @@ async function importXlsx(fileName: string, entries: Map<string, Uint8Array>): P
   let rowsWithSidecar = [...firstRows, trailer];
   if (byteLen(JSON.stringify({ columns: firstColumns, rows: rowsWithSidecar })) > MAX_WORKS_CONTENT_BYTES) {
     rowsWithSidecar = firstRows;
-    if (sheetsMeta.length > 1) warnings.push("Kept first worksheet to fit workspace 64 KiB limit.");
+    if (sheetsMeta.length > 1) {
+      warningCodes.push("kept_first_sheet");
+      warnings.push("Kept first worksheet to fit workspace 64 KiB limit.");
+    }
   }
   while (
     rowsWithSidecar.length > 0 &&
     byteLen(JSON.stringify({ columns: firstColumns, rows: rowsWithSidecar })) > MAX_WORKS_CONTENT_BYTES
   ) {
     rowsWithSidecar = rowsWithSidecar.slice(0, Math.floor(rowsWithSidecar.length * 0.8));
-    if (!warnings.some((w) => w.includes("truncated"))) {
+    if (!warningCodes.includes("truncated_sheet")) {
+      warningCodes.push("truncated_sheet");
       warnings.push("Spreadsheet rows were truncated to fit workspace 64 KiB limit.");
     }
   }
 
-  const title = titleFromFileName(fileName, "Imported sheet");
+  const title = corePropTitle(entries, titleFromFileName(fileName, "Imported sheet"));
   return {
     kind: "sheet",
     title,
     content: { kind: "sheet", columns: firstColumns, rows: rowsWithSidecar },
     warnings,
+    warningCodes,
   };
 }
 
@@ -695,7 +810,7 @@ async function importPptx(fileName: string, entries: Map<string, Uint8Array>): P
     const sldXml = readXmlEntry(entries, target);
     if (!sldXml) continue;
 
-    // Speaker notes lookup via slide relationships
+    // Speaker notes lookup via slide relationships (skip slide-number / image placeholders)
     const slideDir = target.includes("/") ? target.slice(0, target.lastIndexOf("/")) : "ppt";
     const slideBase = target.split("/").pop() ?? "";
     const slideRels = parseRelsMap(readXmlEntry(entries, `${slideDir}/_rels/${slideBase}.rels`));
@@ -704,7 +819,18 @@ async function importPptx(fileName: string, entries: Map<string, Uint8Array>): P
       if (rel.type.endsWith("/notesSlide")) {
         const notesXml = readXmlEntry(entries, resolveZipTarget(slideDir, rel.target));
         if (notesXml) {
-          notesText = extractSlideShapeText(notesXml).join("\n").trim();
+          const bodyNotes: string[] = [];
+          const otherNotes: string[] = [];
+          for (const nsp of matchElements(notesXml, "p:sp")) {
+            const phM = /<p:ph\b([^>]*)\/?>/i.exec(nsp.inner);
+            const nPhType = phM ? xmlAttr(phM[1], "type").toLowerCase() : "";
+            if (nPhType === "sldnum" || nPhType === "sldimg") continue;
+            const lines = extractSlideShapeText(nsp.inner);
+            if (!lines.length) continue;
+            if (nPhType === "body") bodyNotes.push(...lines);
+            else otherNotes.push(...lines);
+          }
+          notesText = (bodyNotes.length ? bodyNotes : otherNotes).join("\n").trim();
         }
         break;
       }
@@ -779,6 +905,7 @@ async function importPptx(fileName: string, entries: Map<string, Uint8Array>): P
   }
 
   const warnings: string[] = [];
+  const warningCodes: ImportWarningCode[] = [];
   let candidate = slides;
   if (byteLen(JSON.stringify({ slides: candidate })) > MAX_WORKS_CONTENT_BYTES) {
     candidate = slides.map((s) => ({
@@ -786,6 +913,7 @@ async function importPptx(fileName: string, entries: Map<string, Uint8Array>): P
       body: s.body,
       ...(s.notes ? { notes: s.notes.split("\n---cfos-slide-v1---\n")[0] } : {}),
     }));
+    warningCodes.push("simplified_deck");
     warnings.push("Simplified slide metadata to fit workspace 64 KiB limit.");
   }
   while (
@@ -793,16 +921,18 @@ async function importPptx(fileName: string, entries: Map<string, Uint8Array>): P
     byteLen(JSON.stringify({ slides: candidate })) > MAX_WORKS_CONTENT_BYTES
   ) {
     candidate = candidate.slice(0, Math.floor(candidate.length * 0.8));
-    if (!warnings.some((w) => w.includes("truncated"))) {
+    if (!warningCodes.includes("truncated_deck")) {
+      warningCodes.push("truncated_deck");
       warnings.push("Presentation slides were truncated to fit workspace 64 KiB limit.");
     }
   }
 
   return {
     kind: "deck",
-    title: titleFromFileName(fileName, "Imported deck"),
+    title: corePropTitle(entries, titleFromFileName(fileName, "Imported deck")),
     content: { kind: "deck", slides: candidate },
     warnings,
+    warningCodes,
   };
 }
 
@@ -860,15 +990,20 @@ function importCsv(fileName: string, bytes: Uint8Array): ImportedWorksDraft {
     Array.from({ length: width }, (_, c) => coerceCell(r[c] ?? "")),
   );
   const warnings: string[] = [];
+  const warningCodes: ImportWarningCode[] = [];
   while (rows.length > 0 && byteLen(JSON.stringify({ columns, rows })) > MAX_WORKS_CONTENT_BYTES) {
     rows = rows.slice(0, Math.floor(rows.length * 0.8));
-    if (!warnings.length) warnings.push("CSV rows were truncated to fit workspace 64 KiB limit.");
+    if (!warningCodes.length) {
+      warningCodes.push("truncated_sheet");
+      warnings.push("CSV rows were truncated to fit workspace 64 KiB limit.");
+    }
   }
   return {
     kind: "sheet",
     title: titleFromFileName(fileName, "Imported CSV"),
     content: { kind: "sheet", columns, rows },
     warnings,
+    warningCodes,
   };
 }
 
@@ -893,15 +1028,19 @@ function importMarkdownOrText(fileName: string, bytes: Uint8Array): ImportedWork
   }
   if (!blocks.length) blocks.push({ type: "p", text: " " });
   const warnings: string[] = [];
+  const warningCodes: ImportWarningCode[] = [];
   let candidate = blocks;
   while (
     candidate.length > 1 &&
     byteLen(JSON.stringify({ blocks: candidate })) > MAX_WORKS_CONTENT_BYTES
   ) {
-    candidate = candidate.slice(0, Math.floor(candidate.length * 0.8));
-    if (!warnings.length) warnings.push("Document was truncated to fit workspace 64 KiB limit.");
+    candidate = candidate.slice(0, Math.max(1, Math.floor(candidate.length * 0.8)));
+    if (!warningCodes.length) {
+      warningCodes.push("truncated_doc");
+      warnings.push("Document was truncated to fit workspace 64 KiB limit.");
+    }
   }
-  return { kind: "doc", title, content: { kind: "doc", blocks: candidate }, warnings };
+  return { kind: "doc", title, content: { kind: "doc", blocks: candidate }, warnings, warningCodes };
 }
 
 // ---- Entrypoint ---------------------------------------------------------

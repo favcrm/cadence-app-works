@@ -1,5 +1,5 @@
 import { Button, ErrorNotice, Field, Select } from "@cadence/screen-ui";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { setUnsaved } from "../../bridge/leave";
 import type { Kind } from "../../bridge/operations";
 import type { DisplayScope } from "../../bridge/scope";
@@ -13,11 +13,15 @@ import { PROBLEM_KEY } from "./problems";
 export function NewView({
   scope,
   initialKind,
+  importing,
+  onImportFile,
   onCreated,
   onCancel,
 }: {
   scope: DisplayScope;
   initialKind: Kind;
+  importing: boolean;
+  onImportFile: (file: File) => void;
   onCreated: (item: WorksItem) => void;
   onCancel: () => void;
 }) {
@@ -30,6 +34,9 @@ export function NewView({
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const owner = useRef(Symbol("works-new"));
 
   useEffect(() => {
@@ -67,20 +74,83 @@ export function NewView({
     }
   };
 
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) onImportFile(file);
+  };
+
+  const handleDragEnter = (event: DragEvent) => {
+    if (busy || importing || !event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragOver(true);
+  };
+
+  const handleDragOver = (event: DragEvent) => {
+    if (busy || importing || !event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDragLeave = (event: DragEvent) => {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragOver(false);
+  };
+
+  const handleDrop = (event: DragEvent) => {
+    if (busy || importing) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragOver(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) onImportFile(file);
+  };
+
   return (
-    <form className="works-form works-new-shell" noValidate onSubmit={(event) => void submit(event)}>
+    <form
+      className="works-form works-new-shell"
+      noValidate
+      onSubmit={(event) => void submit(event)}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="works-toolbar">
         <h2 className="text-section works-heading" data-outlet-heading>
           {t("new.title")}
         </h2>
         <div className="works-chips">
-          <Button variant="primary" size="sm" type="submit" loading={busy}>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={importing}
+            disabled={busy || importing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importing ? t("import.busy") : t("import.choose_file")}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".docx,.xlsx,.pptx,.csv,.md,.txt"
+            aria-label={t("import.choose_file")}
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+          <Button variant="primary" size="sm" type="submit" loading={busy} disabled={importing}>
             {t("action.create")}
           </Button>
-          <Button size="sm" disabled={busy} onClick={onCancel}>
+          <Button size="sm" disabled={busy || importing} onClick={onCancel}>
             {t("action.cancel")}
           </Button>
         </div>
+      </div>
+      {dragOver ? <div className="works-import-dropbanner">{t("import.drop_hint")}</div> : null}
+      <div className="works-import-dropzone">
+        <p className="works-muted">{t("import.view_body")}</p>
       </div>
       <div className="works-new-meta">
         <Field label={t("field.kind")}>
