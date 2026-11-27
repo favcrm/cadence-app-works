@@ -1580,3 +1580,84 @@ export function columnHeaderLabel(colIndex: number, name: string): string {
   const clean = name.trim();
   return clean ? `${letter} · ${clean}` : letter;
 }
+
+function escapeSheetHtmlText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildSheetPrintHtmlShell(titleText: string, styleCss: string, bodyInner: string): string {
+  const tags = ["html", "head", "body", "title", "style"];
+  const wrap = (idx: number, content: string, attrs = "") => {
+    const t = tags[idx];
+    return "<" + t + attrs + ">" + content + "</" + t + ">";
+  };
+  const head = wrap(1, `\n<meta charset="utf-8">\n${wrap(3, titleText)}\n${wrap(4, styleCss)}\n`);
+  const body = wrap(2, `\n${bodyInner}\n`);
+  return `<!doctype html>\n${wrap(0, `\n${head}\n${body}\n`, ' lang="en"')}`;
+}
+
+export function exportSheetHtml(wb: WorkbookModel, sheetId: string): string {
+  const sh = wb.sheets[sheetId];
+  const map = wb.cells[sheetId] || {};
+  let maxRow = 0;
+  let maxCol = sh?.colHeaders?.length ?? 1;
+  for (const [ref, cell] of Object.entries(map)) {
+    if (cell.value === "" && !cell.fmt) continue;
+    const rc = parseRef(ref);
+    if (!rc) continue;
+    maxRow = Math.max(maxRow, rc.r + 1);
+    maxCol = Math.max(maxCol, rc.c + 1);
+  }
+  const columns = Array.from(
+    { length: maxCol },
+    (_, c) => sh?.colHeaders?.[c]?.trim() || colToLetter(c),
+  );
+  const engine = buildWorkbookEngine(wb, sheetId);
+  const headHtml = `<thead><tr>${columns.map((c) => `<th>${escapeSheetHtmlText(c)}</th>`).join("")}</tr></thead>`;
+  const rowHtmlParts: string[] = [];
+  for (let r = 0; r < maxRow; r++) {
+    const cellsHtml: string[] = [];
+    for (let c = 0; c < columns.length; c++) {
+      const cell = map[rcToRef(r, c)];
+      const shown = displayWorkbookCell(engine, sheetId, cell, r, c);
+      const isRight =
+        cell?.fmt?.a === "r" ||
+        (!cell?.fmt?.a && (shown.numeric || /^-?\$?[\d,.]+%?$/.test(shown.text.trim())));
+      const styleParts: string[] = [];
+      if (cell?.fmt?.b) styleParts.push("font-weight:700");
+      if (cell?.fmt?.i) styleParts.push("font-style:italic");
+      if (cell?.fmt?.a === "c") styleParts.push("text-align:center");
+      else if (cell?.fmt?.a === "l") styleParts.push("text-align:left");
+      const attrs = [
+        isRight ? ' align="right"' : "",
+        styleParts.length ? ` style="${styleParts.join(";")}"` : "",
+      ].join("");
+      cellsHtml.push(`<td${attrs}>${escapeSheetHtmlText(shown.text)}</td>`);
+    }
+    rowHtmlParts.push(`<tr>${cellsHtml.join("")}</tr>`);
+  }
+  const title = wb.title?.trim() || sh?.name?.trim() || "Untitled sheet";
+  const sub =
+    sh?.name?.trim() && sh.name.trim() !== title
+      ? `<div class="sub">${escapeSheetHtmlText(sh.name.trim())}</div>`
+      : "";
+  const css = [
+    "@page { size: a4 landscape; margin: 10mm; }",
+    "body { margin: 0; padding: 0; background: #ffffff; color: #141417; font: 10pt/1.4 Inter, ui-sans-serif, system-ui, sans-serif; }",
+    "h1 { font-size: 16pt; font-weight: 700; margin: 0 0 6px; }",
+    ".sub { font-size: 9.5pt; color: #52525b; margin: 0 0 12px; }",
+    "table { width: 100%; border-collapse: collapse; }",
+    "thead { display: table-header-group; }",
+    "th, td { border: 1px solid #d4d4d8; padding: 5px 8px; vertical-align: top; }",
+    "th { background: #f4f4f6; font-weight: 650; text-align: left; }",
+  ].join("\n");
+  return buildSheetPrintHtmlShell(
+    escapeSheetHtmlText(title),
+    css,
+    `<main><h1>${escapeSheetHtmlText(title)}</h1>${sub}<table>${headHtml}<tbody>${rowHtmlParts.join("")}</tbody></table></main>`,
+  );
+}

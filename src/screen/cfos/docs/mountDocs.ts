@@ -1,7 +1,7 @@
 // Ported from cloudflare-os workspace-docs/files/client.ts
 
 import type { DocBlock } from "../../domain/works";
-import { sanitizeFileName, triggerDownload } from "../ui/download";
+import { runToolbarPdfExport, sanitizeFileName, triggerDownload } from "../ui/download";
 import { el, icon } from "../ui/dom";
 import { ICONS, type IconName } from "../ui/icons";
 import { imageFilesFrom, isImageFile, prepareImage, type PreparedImage } from "../ui/images";
@@ -22,6 +22,7 @@ import {
   docToMarkdown,
   escapeHtml,
   exportDocHtml,
+  exportDocPdfHtml,
   worksDocToCfos,
   type CfosDocBlock,
 } from "./codec";
@@ -67,6 +68,8 @@ export interface DocLabels {
   clearFormat: string;
   exportMenu: string;
   copyMarkdown: string;
+  downloadPdf: string;
+  pdfExportFailed: string;
   downloadDocx: string;
   downloadMarkdown: string;
   downloadHtml: string;
@@ -870,6 +873,24 @@ export function mountDocs({
 
   const exportBtn = iconBtn(ICONS.download, labels.exportMenu, () => {});
   const unbindExport = bindActionMenu(exportBtn, () => [
+    {
+      id: "dl-pdf",
+      label: labels.downloadPdf,
+      desc: ".pdf",
+      onSelect: () => {
+        const html = exportDocPdfHtml(currentTitle, collectCfosBlocks());
+        void runToolbarPdfExport({
+          button: exportBtn,
+          filename: sanitizeFileName(currentTitle, "document", "pdf"),
+          html,
+          defaultTitle: labels.exportMenu,
+          errorPrefix: labels.pdfExportFailed,
+          checkHtml: icon(ICONS.check),
+          idleHtml: icon(ICONS.download),
+          paper: "a4",
+        });
+      },
+    },
     {
       id: "dl-docx",
       label: labels.downloadDocx,

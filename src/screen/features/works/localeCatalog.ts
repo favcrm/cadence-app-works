@@ -247,6 +247,8 @@ export const messages = {
   "cfos.undo": { en: "Undo", "zh-TW": "復原" },
   "cfos.redo": { en: "Redo", "zh-TW": "重做" },
   "cfos.copied": { en: "Copied", "zh-TW": "已複製" },
+  "cfos.download_pdf": { en: "Download PDF", "zh-TW": "下載 PDF" },
+  "cfos.pdf_export_failed": { en: "PDF export failed", "zh-TW": "PDF 匯出失敗" },
   "cfos.text_color": { en: "Text color", "zh-TW": "文字顏色" },
   "cfos.highlight_color": { en: "Highlight color", "zh-TW": "螢光筆顏色" },
   "cfos.align_left": { en: "Align left", "zh-TW": "靠左對齊" },
