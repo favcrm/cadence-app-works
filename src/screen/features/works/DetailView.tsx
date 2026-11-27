@@ -2,18 +2,30 @@ import { ApiError, Button, ConfirmDialog, ErrorNotice, Loading, Notice } from "@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setUnsaved } from "../../bridge/leave";
 import type { DisplayScope } from "../../bridge/scope";
+import { exportDocPdfHtml, worksDocToCfos } from "../../cfos/docs/codec";
+import { buildDocxBytes } from "../../cfos/docs/docx";
+import { worksSheetToCfos } from "../../cfos/sheets/codec";
+import { exportSheetHtml } from "../../cfos/sheets/formula";
+import { buildXlsxBytes } from "../../cfos/sheets/xlsx";
+import { exportDeckPdfHtml, worksDeckToCfos } from "../../cfos/slides/codec";
+import { buildPptxBytes } from "../../cfos/slides/pptx";
 import { SaveScheduler, type SaveStatus } from "../../cfos/sync/saveScheduler";
+import { triggerSubmitDocument } from "../../cfos/ui/download";
 import {
   patchOperations,
   validateDraft,
   validId,
   type Content,
+  type HistoricalWorksItem,
+  type RevisionSummary,
   type WorksItem,
 } from "../../domain/works";
 import {
   classify,
   exportSlot,
   getItem,
+  getItemRevision,
+  getItemWithRevisions,
   patchItem,
   requestReview,
   reviewSlot,
@@ -27,7 +39,7 @@ import { ContentView } from "./renderers";
 import { KindChip, ReviewChip } from "./StatusChip";
 
 type NoticeState = { tone: "ok" | "error"; text: string } | null;
-type Busy = "load" | "save" | "request" | "review" | "export" | "trash" | null;
+type Busy = "load" | "save" | "request" | "review" | "export" | "trash" | "restore_rev" | "submit_doc" | null;
 
 export interface DetailProps {
   scope: DisplayScope;
@@ -62,6 +74,13 @@ export function DetailView(props: DetailProps) {
   const [confirmReload, setConfirmReload] = useState(false);
   const [trashError, setTrashError] = useState<string | null>(null);
   const [reviewUnsupported, setReviewUnsupported] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [revisions, setRevisions] = useState<RevisionSummary[] | null>(null);
+  const [viewingRev, setViewingRev] = useState<HistoricalWorksItem | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitLabel, setSubmitLabel] = useState("report");
+  const [submitFormat, setSubmitFormat] = useState<"pdf" | "office">("pdf");
 
   const version = useRef(0);
   const owner = useRef(Symbol("works-detail"));
@@ -126,7 +145,7 @@ export function DetailView(props: DetailProps) {
     [t],
   );
 
-  const editing = !canvas && props.canEdit && mode === "edit";
+  const editing = !canvas && props.canEdit && mode === "edit" && viewingRev === null;
 
   useEffect(() => {
     const scheduler = new SaveScheduler({
@@ -254,6 +273,128 @@ export function DetailView(props: DetailProps) {
   // Reload replaces the draft with the host copy, so a dirty draft needs an explicit yes.
   const requestReload = () => (dirty ? setConfirmReload(true) : void load());
 
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const full = await getItemWithRevisions(scope, item.id);
+      setRevisions(full.revisions);
+    } catch (error) {
+      setNotice({ tone: "error", text: message(classify(error)) });
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const toggleHistory = () => {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+    setSubmitOpen(false);
+    setHistoryOpen(true);
+    void loadHistory();
+  };
+
+  const viewHistoricalRevision = async (rev: number) => {
+    if (rev === item.revision) {
+      setViewingRev(null);
+      return;
+    }
+    try {
+      const snap = await getItemRevision(scope, item.id, rev);
+      setViewingRev(snap);
+    } catch (error) {
+      setNotice({ tone: "error", text: message(classify(error)) });
+    }
+  };
+
+  const restoreHistoricalRevision = async (snap: HistoricalWorksItem) => {
+    await run("restore_rev", async () => {
+      schedulerRef.current?.cancel();
+      const ops = patchOperations(item, snap.title, snap.content);
+      if (!ops.length) {
+        setViewingRev(null);
+        return;
+      }
+      const next = await patchItem(scope, item, ops);
+      adopt(next, true);
+      setViewingRev(null);
+      setSaveStatus("saved");
+      setNotice({ tone: "ok", text: t("history.restored_notice", { from: snap.revision, n: next.revision }) });
+      void loadHistory();
+    });
+  };
+
+  const officeExtForKind = item.kind === "doc" ? "docx" : item.kind === "sheet" ? "xlsx" : "pptx";
+
+  const submitDeliverable = async (submitForReview: boolean) => {
+    const trimmedLabel = submitLabel.trim();
+    if (!trimmedLabel || trimmedLabel.length > 40 || /[/\\]/.test(trimmedLabel) || /^\.+$/.test(trimmedLabel)) {
+      setNotice({ tone: "error", text: t("submit_doc.invalid_label") });
+      return;
+    }
+    const cleanTitle = title.trim() || item.title;
+    await run("submit_doc", async () => {
+      let receipt: { ok: true; id: string; stage: string } | { ok: false; error: string };
+      if (submitFormat === "pdf") {
+        let html = "";
+        if (content.kind === "doc") {
+          html = exportDocPdfHtml(cleanTitle, worksDocToCfos(content.blocks));
+        } else if (content.kind === "sheet") {
+          const wb = worksSheetToCfos(
+            { columns: [...content.columns], rows: content.rows.map((r) => [...r]) },
+            cleanTitle,
+          );
+          html = exportSheetHtml(wb, wb.sheetOrder[0] || "s_1");
+        } else {
+          html = exportDeckPdfHtml(cleanTitle, worksDeckToCfos(content.slides).deck);
+        }
+        receipt = await triggerSubmitDocument({
+          title: cleanTitle,
+          label: trimmedLabel,
+          kind: "pdf",
+          html,
+          ...(content.kind === "doc" ? { paper: "a4" as const } : {}),
+          submit: submitForReview,
+        });
+      } else {
+        let bytes: Uint8Array;
+        let outKind: "docx" | "xlsx" | "pptx";
+        if (content.kind === "doc") {
+          outKind = "docx";
+          bytes = await buildDocxBytes(cleanTitle, worksDocToCfos(content.blocks));
+        } else if (content.kind === "sheet") {
+          outKind = "xlsx";
+          const wb = worksSheetToCfos(
+            { columns: [...content.columns], rows: content.rows.map((r) => [...r]) },
+            cleanTitle,
+          );
+          bytes = await buildXlsxBytes(wb);
+        } else {
+          outKind = "pptx";
+          const hydratedDeck = worksDeckToCfos(content.slides);
+          bytes = await buildPptxBytes(hydratedDeck.deck, hydratedDeck.speakerNotes);
+        }
+        receipt = await triggerSubmitDocument({
+          title: cleanTitle,
+          label: trimmedLabel,
+          kind: outKind,
+          bytes,
+          submit: submitForReview,
+        });
+      }
+      if (!receipt.ok) {
+        setNotice({ tone: "error", text: receipt.error });
+        return;
+      }
+      setSubmitOpen(false);
+      setNotice({
+        tone: "ok",
+        text: t(submitForReview ? "submit_doc.done_review" : "submit_doc.done_draft", { id: receipt.id }),
+      });
+    });
+  };
+
   const statusText =
     saveStatus === "saving"
       ? t("status.saving")
@@ -341,6 +482,21 @@ export function DetailView(props: DetailProps) {
             </Button>
             <Button size="sm" disabled={locked} onClick={requestReload}>
               {t("action.reload")}
+            </Button>
+            <Button size="sm" aria-pressed={historyOpen} disabled={locked} onClick={toggleHistory}>
+              {t("history.button")}
+            </Button>
+            <Button
+              size="sm"
+              aria-pressed={submitOpen}
+              disabled={locked || dirty}
+              title={dirty ? t("hint.save_first") : undefined}
+              onClick={() => {
+                setHistoryOpen(false);
+                setSubmitOpen((was) => !was);
+              }}
+            >
+              {t("submit_doc.button")}
             </Button>
             {showReviewControls && props.canRequestReview && item.reviewStatus === "none" ? (
               <Button
@@ -433,7 +589,127 @@ export function DetailView(props: DetailProps) {
         )
       ) : null}
 
-      {editing ? (
+      {historyOpen && !canvas ? (
+        <div className="works-panel-card" data-works-history>
+          <div className="works-panel-head">
+            <strong>{t("history.title")}</strong>
+            <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(false)}>
+              {t("action.dismiss")}
+            </Button>
+          </div>
+          {historyLoading ? (
+            <p className="text-micro">{t("history.loading")}</p>
+          ) : (
+            <div className="works-history-list">
+              {(revisions ?? []).map((rev) => (
+                <div key={rev.revision} className="works-history-row">
+                  <span>
+                    <strong>r{rev.revision}</strong> · {rev.title}
+                    {rev.revision === item.revision ? ` (${t("history.current")})` : ""}
+                    {" · "}
+                    <span className="num">{rev.updatedAt.slice(0, 16).replace("T", " ")}</span>
+                  </span>
+                  <div className="works-chips">
+                    <Button
+                      size="sm"
+                      variant={viewingRev?.revision === rev.revision ? "primary" : "ghost"}
+                      onClick={() => void viewHistoricalRevision(rev.revision)}
+                    >
+                      {rev.revision === item.revision ? t("history.back_current") : t("action.preview")}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {submitOpen && !canvas && props.canEdit ? (
+        <div className="works-panel-card" data-works-submit-doc>
+          <div className="works-panel-head">
+            <strong>{t("submit_doc.heading")}</strong>
+            <Button size="sm" variant="ghost" onClick={() => setSubmitOpen(false)}>
+              {t("action.cancel")}
+            </Button>
+          </div>
+          <div className="works-submit-grid">
+            <label style={{ display: "grid", gap: "4px" }}>
+              <span>{t("submit_doc.label")}</span>
+              <input
+                className="field"
+                value={submitLabel}
+                maxLength={40}
+                onChange={(e) => setSubmitLabel(e.target.value)}
+              />
+            </label>
+            <div style={{ display: "grid", gap: "4px" }}>
+              <span>{t("submit_doc.format")}</span>
+              <div style={{ display: "flex", gap: "6px" }} role="group" aria-label={t("submit_doc.format")}>
+                <Button
+                  size="sm"
+                  variant={submitFormat === "pdf" ? "primary" : undefined}
+                  aria-pressed={submitFormat === "pdf"}
+                  onClick={() => setSubmitFormat("pdf")}
+                >
+                  PDF (.pdf)
+                </Button>
+                <Button
+                  size="sm"
+                  variant={submitFormat === "office" ? "primary" : undefined}
+                  aria-pressed={submitFormat === "office"}
+                  onClick={() => setSubmitFormat("office")}
+                >
+                  {`Office (.${officeExtForKind})`}
+                </Button>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              loading={busy === "submit_doc"}
+              disabled={locked}
+              onClick={() => void submitDeliverable(false)}
+            >
+              {busy === "submit_doc" ? t("submit_doc.busy") : t("submit_doc.save_draft")}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={busy === "submit_doc"}
+              disabled={locked}
+              onClick={() => void submitDeliverable(true)}
+            >
+              {busy === "submit_doc" ? t("submit_doc.busy") : t("submit_doc.submit_review")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {viewingRev ? (
+        <Notice>
+          {t("history.viewing", { n: viewingRev.revision })}{" "}
+          <Button size="sm" onClick={() => setViewingRev(null)}>
+            {t("history.back_current")}
+          </Button>{" "}
+          {props.canEdit ? (
+            <Button
+              size="sm"
+              variant="primary"
+              loading={busy === "restore_rev"}
+              disabled={locked}
+              onClick={() => void restoreHistoricalRevision(viewingRev)}
+            >
+              {t("history.restore_rev", { n: viewingRev.revision })}
+            </Button>
+          ) : null}
+        </Notice>
+      ) : null}
+
+      {viewingRev ? (
+        <div className="works-workbench-frame">
+          <ContentView title={viewingRev.title} content={viewingRev.content} resetKey={viewingRev.revision} />
+        </div>
+      ) : editing ? (
         <div className="works-workbench-frame">
           <fieldset className="works-fieldset" disabled={stale}>
             <ContentEditor

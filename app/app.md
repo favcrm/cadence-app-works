@@ -1,7 +1,7 @@
 ---
 app: works
 title: Works
-version: '0.7.0'
+version: '0.8.0'
 summary: Create and edit revisioned docs, decks and sheets in a hosted workspace.
 needs:
   connections: []
@@ -20,10 +20,12 @@ listing:
     - documents
   publisher:
     name: Cadence
-  about: Works keeps docs, decks and sheets in a hosted workspace. Board members can browse and read; board owners can create, edit, trash and restore. Review and export are not available in this release.
+  about: Works keeps revisioned docs, decks and sheets in a hosted workspace. Create and edit rich docs with tables, formula-driven spreadsheets, and multi-slide decks; import and export PDF, DOCX, XLSX, PPTX, Markdown, CSV, and HTML; restore trashed items or earlier revisions; and submit deliverables straight to Documents.
   can:
     - Browse and read docs, decks and sheets as a board member
-    - Create, edit, trash and restore content as a board owner
+    - Create, edit, trash, restore and inspect revision history as a board owner
+    - Import and export PDF, DOCX, XLSX, PPTX, Markdown, CSV, and HTML deliverables
+    - Submit finalized PDF or Office deliverables to the hosted Documents approval lifecycle
   screenshots: []
   setup: []
   data:

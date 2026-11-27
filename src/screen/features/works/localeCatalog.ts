@@ -368,6 +368,41 @@ export const messages = {
     en: "- First point\n- Second point\n- Next steps",
     "zh-TW": "- 重點一\n- 重點二\n- 下一步",
   },
+
+  "list.tab_active": { en: "Active", "zh-TW": "使用中" },
+  "list.tab_trash": { en: "Trash", "zh-TW": "垃圾桶" },
+  "list.trash_empty_title": { en: "Trash is empty", "zh-TW": "垃圾桶是空的" },
+  "list.trash_empty_body": { en: "Trashed docs, sheets, and decks appear here so you can restore them.", "zh-TW": "移至垃圾桶的文件、試算表與簡報會顯示在此，可隨時還原。" },
+  "list.restored_notice": { en: "Restored “{title}”.", "zh-TW": "已還原「{title}」。" },
+  "action.column_actions": { en: "Actions", "zh-TW": "操作" },
+
+  "history.button": { en: "History", "zh-TW": "版本紀錄" },
+  "history.title": { en: "Revision history", "zh-TW": "版本歷史紀錄" },
+  "history.loading": { en: "Loading revisions…", "zh-TW": "正在載入版本紀錄…" },
+  "history.current": { en: "Current", "zh-TW": "目前版本" },
+  "history.viewing": { en: "Viewing historical revision r{n}", "zh-TW": "正在檢視歷史版本 r{n}" },
+  "history.back_current": { en: "Back to current", "zh-TW": "返回目前版本" },
+  "history.restore_rev": { en: "Restore r{n}", "zh-TW": "還原至 r{n}" },
+  "history.restored_notice": { en: "Restored content from r{from} as r{n}.", "zh-TW": "已將 r{from} 內容還原為第 {n} 版。" },
+
+  "submit_doc.button": { en: "Submit to Documents", "zh-TW": "提交至審批文件" },
+  "submit_doc.heading": { en: "Send deliverable to Documents", "zh-TW": "送交成果至審批文件" },
+  "submit_doc.label": { en: "Document type label", "zh-TW": "文件類型標籤" },
+  "submit_doc.format": { en: "Format", "zh-TW": "格式" },
+  "submit_doc.save_draft": { en: "Save as draft", "zh-TW": "存為草稿" },
+  "submit_doc.submit_review": { en: "Submit for review", "zh-TW": "送交審閱" },
+  "submit_doc.busy": { en: "Submitting…", "zh-TW": "提交中…" },
+  "submit_doc.done_draft": { en: "Saved to Documents as draft ({id}).", "zh-TW": "已存為審批文件草稿（{id}）。" },
+  "submit_doc.done_review": { en: "Submitted to Documents for review ({id}).", "zh-TW": "已送交審批文件進行審閱（{id}）。" },
+  "submit_doc.invalid_label": { en: "Enter a document type label (1-40 characters, no slashes).", "zh-TW": "請輸入有效的文件類型標籤（1–40 字元，不可含斜線）。" },
+
+  "cfos.doc_table": { en: "Table", "zh-TW": "表格" },
+  "cfos.doc_table_insert": { en: "Insert 3×3 table", "zh-TW": "插入 3×3 表格" },
+  "cfos.doc_table_add_row": { en: "Add row below", "zh-TW": "在下方插入列" },
+  "cfos.doc_table_add_col": { en: "Add column right", "zh-TW": "在右側插入欄" },
+  "cfos.doc_table_del_row": { en: "Delete row", "zh-TW": "刪除列" },
+  "cfos.doc_table_del_col": { en: "Delete column", "zh-TW": "刪除欄" },
+  "cfos.doc_table_del_table": { en: "Delete table", "zh-TW": "刪除表格" },
 } as const;
 
 export type MessageKey = keyof typeof messages;

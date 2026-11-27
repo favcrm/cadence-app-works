@@ -1,9 +1,9 @@
-import { Button, DataTable, EmptyState, ErrorNotice, Loading, Select } from "@cadence/screen-ui";
+import { Button, DataTable, EmptyState, ErrorNotice, Loading, Notice, Select } from "@cadence/screen-ui";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import type { Kind } from "../../bridge/operations";
 import type { DisplayScope } from "../../bridge/scope";
 import type { WorksRow } from "../../domain/works";
-import { classify, queryRows, type Failure } from "./api";
+import { classify, queryRows, restoreItem, type Failure } from "./api";
 import { useLocale } from "./locale";
 import { KindChip, ReviewChip } from "./StatusChip";
 
@@ -12,6 +12,7 @@ export interface ListProps {
   kind: Kind | undefined;
   canvas: boolean;
   canCreate: boolean;
+  canRestore: boolean;
   creatingKind: Kind | null;
   importing: boolean;
   refreshKey: number;
@@ -26,6 +27,7 @@ export function ListView({
   kind,
   canvas,
   canCreate,
+  canRestore,
   creatingKind,
   importing,
   refreshKey,
@@ -44,6 +46,10 @@ export function ListView({
   const [text, setText] = useState("");
   const [review, setReview] = useState("all");
   const [sort, setSort] = useState<"updated" | "name">("updated");
+  const [showTrash, setShowTrash] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setFailure(null);
@@ -51,16 +57,17 @@ export function ListView({
       setRows(
         await queryRows(scope, {
           sort,
+          ...(showTrash ? { trashed: true } : {}),
           ...(kind ? { kind } : {}),
           ...(text ? { text } : {}),
-          ...(review !== "all" ? { review } : {}),
+          ...(!showTrash && review !== "all" ? { review } : {}),
         }),
       );
     } catch (error) {
       setRows(null);
       setFailure(classify(error));
     }
-  }, [scope, kind, text, review, sort]);
+  }, [scope, kind, text, review, sort, showTrash]);
 
   useEffect(() => {
     void load();
@@ -147,13 +154,25 @@ export function ListView({
           </Button>
         </form>
         <div className="works-chips">
-          <Select
-            size="sm"
-            aria-label={t("filter.review")}
-            value={review}
-            options={reviewOptions}
-            onChange={setReview}
-          />
+          {!canvas && canRestore ? (
+            <div className="works-chips" role="group" aria-label={t("list.table")}>
+              <Button size="sm" aria-pressed={!showTrash} onClick={() => setShowTrash(false)}>
+                {t("list.tab_active")}
+              </Button>
+              <Button size="sm" aria-pressed={showTrash} onClick={() => setShowTrash(true)}>
+                {t("list.tab_trash")}
+              </Button>
+            </div>
+          ) : null}
+          {!showTrash ? (
+            <Select
+              size="sm"
+              aria-label={t("filter.review")}
+              value={review}
+              options={reviewOptions}
+              onChange={setReview}
+            />
+          ) : null}
           <Select
             size="sm"
             aria-label={t("filter.sort")}
@@ -164,7 +183,7 @@ export function ListView({
           <Button size="sm" onClick={() => void load()}>
             {t("action.refresh")}
           </Button>
-          {!canvas && canCreate ? (
+          {!canvas && canCreate && !showTrash ? (
             <>
               <Button
                 size="sm"
@@ -216,6 +235,8 @@ export function ListView({
         </div>
       </div>
 
+      {restoreNotice ? <Notice>{restoreNotice}</Notice> : null}
+      {restoreError ? <ErrorNotice>{restoreError}</ErrorNotice> : null}
       {failure ? (
         <ErrorNotice onRetry={() => void load()} retryLabel={t("action.retry")}>
           {failure.kind === "unavailable"
@@ -227,8 +248,12 @@ export function ListView({
       ) : rows === null ? (
         <Loading>{t("list.loading")}</Loading>
       ) : rows.length === 0 ? (
-        <EmptyState title={t("list.empty_title")} name="works">
-          {text || review !== "all" ? t("list.empty_filtered") : t("list.empty_body")}
+        <EmptyState title={t(showTrash ? "list.trash_empty_title" : "list.empty_title")} name="works">
+          {showTrash
+            ? t(text ? "list.empty_filtered" : "list.trash_empty_body")
+            : text || review !== "all"
+              ? t("list.empty_filtered")
+              : t("list.empty_body")}
         </EmptyState>
       ) : (
         <DataTable
@@ -239,11 +264,14 @@ export function ListView({
             {
               key: "title",
               header: t("column.title"),
-              cell: (row) => (
-                <Button variant="ghost" size="sm" className="works-open" onClick={() => onOpen(row)}>
-                  {row.title}
-                </Button>
-              ),
+              cell: (row) =>
+                showTrash ? (
+                  <span>{row.title}</span>
+                ) : (
+                  <Button variant="ghost" size="sm" className="works-open" onClick={() => onOpen(row)}>
+                    {row.title}
+                  </Button>
+                ),
             },
             { key: "kind", header: t("column.kind"), cell: (row) => <KindChip kind={row.kind} /> },
             { key: "rev", header: t("column.revision"), cell: (row) => `r${row.revision}`, cellClassName: "num" },
@@ -253,6 +281,40 @@ export function ListView({
               cell: (row) => <ReviewChip status={row.reviewStatus} state={row.reviewState} />,
             },
             { key: "updated", header: t("column.updated"), cell: (row) => row.updated },
+            ...(showTrash
+              ? [
+                  {
+                    key: "actions",
+                    header: t("action.column_actions"),
+                    cell: (row: WorksRow) => (
+                      <Button
+                        size="sm"
+                        loading={restoringId === row.id}
+                        disabled={restoringId !== null}
+                        onClick={() => {
+                          setRestoreError(null);
+                          setRestoreNotice(null);
+                          setRestoringId(row.id);
+                          restoreItem(scope, row.id, row.revision).then(
+                            (restored) => {
+                              setRestoringId(null);
+                              setRestoreNotice(t("list.restored_notice", { title: restored.title }));
+                              void load();
+                            },
+                            (error: unknown) => {
+                              setRestoringId(null);
+                              const f = classify(error);
+                              setRestoreError(f.kind === "message" ? t(f.key) : t("error.generic"));
+                            },
+                          );
+                        }}
+                      >
+                        {t("action.restore")}
+                      </Button>
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
       )}

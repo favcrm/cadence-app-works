@@ -70,6 +70,37 @@ function Mounted() {
     return () => clearTimeout(timer);
   }, [snapshot]);
 
+  const importHandlerRef = useRef<((file: File) => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const parentWin = typeof window !== "undefined" ? window.parent : null;
+      if (!parentWin || event.source !== parentWin) return;
+      const data = event.data as Record<string, unknown> | null;
+      if (!data || typeof data !== "object" || data.type !== "cadence-import-file") return;
+      const requestId = typeof data.requestId === "string" ? data.requestId : "";
+      const filename = typeof data.filename === "string" ? data.filename : "";
+      const mimeType = typeof data.mimeType === "string" ? data.mimeType : "application/octet-stream";
+      const rawBytes = data.bytes;
+      const reply = (ok: boolean) => {
+        if (requestId) {
+          parentWin.postMessage({ type: "cadence-import-file-ack", requestId, ok }, "*");
+        }
+      };
+      if (!filename || !(rawBytes instanceof ArrayBuffer) || rawBytes.byteLength === 0 || !importHandlerRef.current) {
+        reply(false);
+        return;
+      }
+      const file = new File([rawBytes], filename, { type: mimeType });
+      void importHandlerRef.current(file).then(
+        () => reply(true),
+        () => reply(false),
+      );
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   if (!snapshot) {
     const lost = scopeError();
     if (lost !== null) return <ErrorNotice>{t("error.lost")}</ErrorNotice>;
@@ -143,6 +174,7 @@ function Mounted() {
       setImporting(false);
     }
   };
+  importHandlerRef.current = handleImportFile;
 
   const quickCreate = (targetKind: Kind) => {
     if (creatingKind !== null || canvas) return;
@@ -262,6 +294,7 @@ function Mounted() {
             kind={kind}
             canvas={canvas}
             canCreate={can("works.create")}
+            canRestore={can("works.restore")}
             creatingKind={creatingKind}
             importing={importing}
             refreshKey={refreshKey}

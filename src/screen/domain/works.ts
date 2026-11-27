@@ -50,6 +50,24 @@ export interface WorksItem extends Omit<WorksRow, "snippet"> {
   content: Content;
 }
 
+export interface RevisionSummary {
+  revision: number;
+  title: string;
+  author: string;
+  contentDigest: string;
+  updatedAt: string;
+}
+
+export interface WorksItemWithRevisions extends WorksItem {
+  revisions: RevisionSummary[];
+}
+
+export interface HistoricalWorksItem extends WorksItem {
+  currentRevision: number;
+  historical: boolean;
+  updatedAt: string;
+}
+
 export interface ExportReceipt {
   id: string;
   revision: number;
@@ -165,6 +183,36 @@ export function parseItem(raw: unknown): WorksItem {
     ...summary,
     exportReason: typeof bag.exportReason === "string" ? bag.exportReason : "",
     content: parseContent(summary.kind, bag),
+  };
+}
+
+export function parseItemWithRevisions(raw: unknown): WorksItemWithRevisions {
+  const item = parseItem(raw);
+  const bag = raw as Bag;
+  const revisionsRaw = Array.isArray(bag.revisions) ? bag.revisions : [];
+  const revisions = revisionsRaw.map((entry): RevisionSummary => {
+    if (!isBag(entry)) return bad("revision summary");
+    return {
+      revision: posInt(entry.revision, "summary revision"),
+      title: str(entry.title, "summary title"),
+      author: str(entry.author, "summary author"),
+      contentDigest: str(entry.contentDigest, "summary digest"),
+      updatedAt: str(entry.updatedAt, "summary updatedAt"),
+    };
+  });
+  return { ...item, revisions };
+}
+
+export function parseHistoricalItem(raw: unknown): HistoricalWorksItem {
+  const item = parseItem(raw);
+  const bag = raw as Bag;
+  const currentRevision =
+    typeof bag.currentRevision === "number" ? posInt(bag.currentRevision, "currentRevision") : item.revision;
+  return {
+    ...item,
+    currentRevision,
+    historical: bag.historical === true,
+    updatedAt: typeof bag.updatedAt === "string" ? bag.updatedAt : "",
   };
 }
 

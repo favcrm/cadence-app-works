@@ -258,6 +258,13 @@ test("docs codec performs lossless Wire v0 roundtrips for rich CFOS blocks", () 
   assert.deepEqual(restored, richBlocks);
   assert.match(cfosBlocksToHtml(restored), /class="doc-title"/);
   assert.match(exportDocHtml("Rich Doc", restored), /<!doctype html>/i);
+
+  const tableBlocks = [
+    { id: "b_t1", html: '<table data-block-id="b_t1"><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody><tr><td>Hosting</td><td>120</td></tr></tbody></table>' },
+  ];
+  const tableWire = cfosDocToWorks(tableBlocks);
+  assert.equal(validateDraft("Table Doc", { kind: "doc", blocks: tableWire }), null);
+  assert.deepEqual(worksDocToCfos(tableWire), tableBlocks);
 });
 
 test("sheets codec preserves formulas, numbers, CSV/TSV, and validateDraft shape", () => {

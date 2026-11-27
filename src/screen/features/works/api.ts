@@ -4,14 +4,18 @@ import type { Kind, QueryArgs } from "../../bridge/operations";
 import type { DisplayScope } from "../../bridge/scope";
 import {
   parseExport,
+  parseHistoricalItem,
   parseItem,
+  parseItemWithRevisions,
   parseRows,
   parseTrashed,
   MalformedReceipt,
   toWire,
   type Content,
   type ExportReceipt,
+  type HistoricalWorksItem,
   type WorksItem,
+  type WorksItemWithRevisions,
   type WorksRow,
 } from "../../domain/works";
 import type { MessageKey } from "./localeCatalog";
@@ -50,6 +54,25 @@ export async function queryRows(scope: DisplayScope, args: QueryArgs): Promise<W
 export async function getItem(scope: DisplayScope, id: string): Promise<WorksItem> {
   const item = parseItem(await call(scope, "works.get", { id }));
   if (item.id !== id) throw new MalformedReceipt("item id");
+  return item;
+}
+
+export async function getItemWithRevisions(
+  scope: DisplayScope,
+  id: string,
+): Promise<WorksItemWithRevisions> {
+  const item = parseItemWithRevisions(await call(scope, "works.get", { id, include_revisions: true }));
+  if (item.id !== id) throw new MalformedReceipt("item id");
+  return item;
+}
+
+export async function getItemRevision(
+  scope: DisplayScope,
+  id: string,
+  revision: number,
+): Promise<HistoricalWorksItem> {
+  const item = parseHistoricalItem(await call(scope, "works.get", { id, revision }));
+  if (item.id !== id || item.revision !== revision) throw new MalformedReceipt("historical item");
   return item;
 }
 
