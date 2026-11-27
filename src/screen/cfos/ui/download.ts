@@ -70,6 +70,99 @@ export function triggerDownload(
   fallbackAnchorDownload(copy, mimeType, filename);
 }
 
+const PDF_EXPORT_TIMEOUT_MS = 30_000;
+
+export async function triggerPdfExport(
+  filename: string,
+  html: string,
+  options?: { paper?: "a4" | "letter" },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parentWin = typeof window !== "undefined" ? window.parent : null;
+  if (!parentWin || parentWin === window || typeof parentWin.postMessage !== "function") {
+    return { ok: false, error: "PDF export requires the hosted Cadence renderer." };
+  }
+  const requestId = `pdf_${Date.now().toString(36)}_${(++downloadSeq).toString(36)}`;
+  return new Promise((resolve) => {
+    let settled = false;
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+    };
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as Record<string, unknown> | null;
+      if (
+        event.source === parentWin &&
+        data &&
+        typeof data === "object" &&
+        data.type === "cadence-pdf-export-ack" &&
+        data.requestId === requestId
+      ) {
+        settled = true;
+        cleanup();
+        if (data.ok === true) {
+          resolve({ ok: true });
+        } else {
+          resolve({
+            ok: false,
+            error: typeof data.error === "string" && data.error ? data.error : "PDF export failed.",
+          });
+        }
+      }
+    };
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({ ok: false, error: "PDF export timed out." });
+    }, PDF_EXPORT_TIMEOUT_MS);
+    window.addEventListener("message", onMessage);
+    parentWin.postMessage(
+      {
+        type: "cadence-pdf-export",
+        requestId,
+        filename,
+        html,
+        ...(options?.paper ? { paper: options.paper } : {}),
+      },
+      "*",
+    );
+  });
+}
+
+export async function runToolbarPdfExport(opts: {
+  button: HTMLButtonElement;
+  filename: string;
+  html: string;
+  defaultTitle: string;
+  errorPrefix: string;
+  checkHtml: string;
+  idleHtml: string;
+  paper?: "a4" | "letter";
+}): Promise<void> {
+  if (opts.button.getAttribute("aria-busy") === "true") return;
+  opts.button.setAttribute("aria-busy", "true");
+  opts.button.disabled = true;
+  try {
+    const res = await triggerPdfExport(
+      opts.filename,
+      opts.html,
+      opts.paper ? { paper: opts.paper } : undefined,
+    );
+    if (res.ok) {
+      opts.button.title = opts.defaultTitle;
+      opts.button.innerHTML = opts.checkHtml;
+      window.setTimeout(() => {
+        opts.button.innerHTML = opts.idleHtml;
+      }, 1200);
+    } else {
+      opts.button.title = `${opts.errorPrefix}: ${res.error}`;
+    }
+  } finally {
+    opts.button.disabled = false;
+    opts.button.removeAttribute("aria-busy");
+  }
+}
+
 export function sanitizeFileName(raw: string, fallback: string, ext: string): string {
   const stem = raw
     .trim()

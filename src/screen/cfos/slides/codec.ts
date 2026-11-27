@@ -487,3 +487,54 @@ export function exportDeckHtml(title: string, deck: CfosDeck): string {
 `;
   return buildDeckHtmlShell(escapeHtmlBasic(title || "Presentation"), css, slidesHtml);
 }
+
+const SLIDE_DATA_IMG_RE = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/i;
+
+export function exportDeckPdfHtml(title: string, deck: CfosDeck): string {
+  const slidesHtml = deck.slides
+    .map((s, idx) => {
+      const heading = escapeHtmlBasic(slideLabel(s));
+      const parts: string[] = [];
+      for (const b of s.blocks) {
+        if (b.type === "logo" || b.type === "title") continue;
+        const p = b.props ?? {};
+        if (b.type === "bulletList" && typeof p.text === "string" && p.text.trim()) {
+          const items = p.text
+            .split("\n")
+            .map((l) => l.trim().replace(/^[-*•]\s+/, ""))
+            .filter(Boolean)
+            .map((l) => `<li>${escapeHtmlBasic(l)}</li>`)
+            .join("");
+          if (items) parts.push(`<ul>${items}</ul>`);
+          continue;
+        }
+        if (b.type === "image" && typeof p.src === "string" && SLIDE_DATA_IMG_RE.test(p.src.trim())) {
+          parts.push(`<img class="slide-img" src="${escapeHtmlBasic(p.src.trim())}" alt="${escapeHtmlBasic(typeof p.alt === "string" ? p.alt : "")}">`);
+          continue;
+        }
+        const texts = [p.eyebrow, p.title, p.text, p.body]
+          .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+          .map((v) => v.trim());
+        if (texts.length) {
+          parts.push(`<p>${escapeHtmlBasic(texts.join(" — ")).replace(/\n/g, "<br>")}</p>`);
+        }
+      }
+      const bodyHtml = parts.length ? `<div class="body">${parts.join("")}</div>` : "";
+      const isCover = !!s.background.coverOrange;
+      return `<section class="slide ${isCover ? "cover" : ""}">\n  <div class="meta">Slide ${idx + 1}</div>\n  <h1>${heading}</h1>\n  ${bodyHtml}\n</section>`;
+    })
+    .join("\n");
+  const css = [
+    "@page { size: 297mm 167mm; margin: 0; }",
+    "body { margin: 0; padding: 0; background: #ffffff; font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; color: #141417; -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
+    ".slide { width: 100%; height: 167mm; padding: 48px 56px; box-sizing: border-box; background: #ffffff; display: flex; flex-direction: column; justify-content: center; break-after: page; page-break-after: always; overflow: hidden; }",
+    ".slide.cover { background: linear-gradient(135deg, #ff5115 0%, #ff861f 58%, #ffc02c 100%); color: #ffffff; }",
+    ".meta { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.72; margin-bottom: 12px; }",
+    "h1 { margin: 0 0 18px; font-size: 32px; line-height: 1.15; letter-spacing: -0.025em; }",
+    ".body p { margin: 0 0 10px; font-size: 18px; line-height: 1.55; opacity: 0.92; }",
+    "ul { margin: 0 0 10px; padding-left: 24px; font-size: 18px; line-height: 1.6; }",
+    "li { margin-bottom: 6px; }",
+    ".slide-img { max-width: 100%; max-height: 92mm; object-fit: contain; border-radius: 8px; margin-top: 8px; }",
+  ].join("\n");
+  return buildDeckHtmlShell(escapeHtmlBasic(title || "Presentation"), css, slidesHtml);
+}

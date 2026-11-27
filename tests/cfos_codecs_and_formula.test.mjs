@@ -8,6 +8,7 @@ import {
   cfosDocToWorks,
   docToMarkdown,
   exportDocHtml,
+  exportDocPdfHtml,
   htmlToMarkdown,
   inlineMarkdownToHtml,
   visibleWorksDocBlocks,
@@ -31,6 +32,7 @@ import {
   displayCell,
   displayValue,
   displayWorkbookCell,
+  exportSheetHtml,
   isErr,
   makeEngine,
   parseRangeText,
@@ -43,6 +45,7 @@ import {
   SLIDE_SIDECAR_MARKER,
   cfosDeckToWorks,
   exportDeckHtml,
+  exportDeckPdfHtml,
   extractBulletItems,
   formatAsBullets,
   isBulletSlide,
@@ -771,4 +774,50 @@ test("import polish: core.xml titles, Word tables round-trip, empty shared formu
   const hugeMd = Array.from({ length: 1200 }, (_, i) => `Paragraph ${i} ` + "x".repeat(80)).join("\n\n");
   const bigDraft = await importFileToWorksDraft("big.md", enc.encode(hugeMd));
   assert.ok(bigDraft.warningCodes.includes("truncated_doc"));
+});
+
+test("PDF print HTML builders sanitize unsafe markup, evaluate sheet formulas, and format slides cleanly", () => {
+  const docHtml = exportDocPdfHtml("Board Memo", [
+    { id: "b1", html: '<p>Revenue <del>20%</del> <strong>28%</strong> <a href="https://example.com">link</a></p>' },
+    { id: "b2", html: '<aside data-works-callout="1">Callout body</aside>' },
+    { id: "b3", html: '<img src="javascript:alert(1)"><script>alert(2)</script><table><thead><tr><th>M</th></tr></thead><tbody><tr><td>ARR</td></tr></tbody></table>' },
+  ]);
+  assert.ok(docHtml.includes("@page { size: a4 portrait;"));
+  assert.ok(docHtml.includes("<h1 class=\"doc-title\">Board Memo</h1>"));
+  assert.ok(docHtml.includes("<s>20%</s>"));
+  assert.ok(!docHtml.includes("<script>"));
+  assert.ok(!docHtml.includes("javascript:"));
+  assert.ok(!docHtml.includes("data-works-callout"));
+
+  const sheetHtml = exportSheetHtml(
+    {
+      title: "Q4 Model",
+      sheetOrder: ["s_1"],
+      sheets: {
+        s_1: { id: "s_1", name: "Summary", rows: 10, cols: 4, colHeaders: ["Item", "Q1", "Q2", "Total"], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
+      },
+      cells: {
+        s_1: {
+          A1: { value: "Cloud", fmt: { b: true } },
+          B1: { value: "100", fmt: null },
+          C1: { value: "150", fmt: null },
+          D1: { value: "=SUM(B1:C1)", fmt: { nf: "currency", d: 0 } },
+        },
+      },
+    },
+    "s_1",
+  );
+  assert.ok(sheetHtml.includes("@page { size: a4 landscape;"));
+  assert.ok(sheetHtml.includes("<th>Total</th>"));
+  assert.ok(sheetHtml.includes("$250"));
+
+  const deckHtml = exportDeckPdfHtml("Annual Review", {
+    slides: [
+      makeCfosSlideTemplate("cover", 0),
+      makeCfosSlideTemplate("bullets", 1),
+    ],
+  });
+  assert.ok(deckHtml.includes("@page { size: 297mm 167mm;"));
+  assert.ok(deckHtml.includes("class=\"slide cover\""));
+  assert.ok(deckHtml.includes("<ul>"));
 });

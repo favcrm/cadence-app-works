@@ -4,7 +4,7 @@
 // slide rail drag-reorder, undo/redo, Present mode, and HTML export.
 
 import type { DeckSlide } from "../../domain/works";
-import { sanitizeFileName, triggerDownload } from "../ui/download";
+import { runToolbarPdfExport, sanitizeFileName, triggerDownload } from "../ui/download";
 import { el, icon } from "../ui/dom";
 import { ICONS } from "../ui/icons";
 import { prepareImage } from "../ui/images";
@@ -12,6 +12,7 @@ import { bindActionMenu, iconBtn } from "../ui/toolbar";
 import {
   cfosDeckToWorks,
   exportDeckHtml,
+  exportDeckPdfHtml,
   makeCfosSlideTemplate,
   newSlideUid,
   slideLabel,
@@ -75,6 +76,8 @@ export interface SlidesLabels {
   duplicateBlock: string;
   uploadImage: string;
   exportMenu: string;
+  downloadPdf: string;
+  pdfExportFailed: string;
   exportPptx: string;
   exportHtml: string;
   fieldNotes: string;
@@ -176,6 +179,23 @@ export function mountSlides({
   const presentBtn = iconBtn(ICONS.expand, labels.presentMode, () => togglePresent());
   const exportBtn = iconBtn(ICONS.download, labels.exportMenu, () => {});
   const unbindExport = bindActionMenu(exportBtn, () => [
+    {
+      id: "pdf",
+      label: labels.downloadPdf,
+      desc: ".pdf",
+      onSelect: () => {
+        const html = exportDeckPdfHtml(deckTitle, deck);
+        void runToolbarPdfExport({
+          button: exportBtn,
+          filename: sanitizeFileName(deckTitle, "deck", "pdf"),
+          html,
+          defaultTitle: labels.exportMenu,
+          errorPrefix: labels.pdfExportFailed,
+          checkHtml: icon(ICONS.check),
+          idleHtml: icon(ICONS.download),
+        });
+      },
+    },
     {
       id: "pptx",
       label: labels.exportPptx,

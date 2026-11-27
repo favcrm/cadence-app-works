@@ -3,7 +3,7 @@
 // number formats, drag resize, frozen panes, right-click context menu, TSV clipboard, CSV/XLSX export.
 
 import type { Cell as WireCell } from "../../domain/works";
-import { sanitizeFileName, triggerDownload } from "../ui/download";
+import { runToolbarPdfExport, sanitizeFileName, triggerDownload } from "../ui/download";
 import { el, icon } from "../ui/dom";
 import { ICONS } from "../ui/icons";
 import { promptInline } from "../ui/prompt";
@@ -29,6 +29,7 @@ import {
   colToLetter,
   columnHeaderLabel,
   displayWorkbookCell,
+  exportSheetHtml,
   formatSelectionRef,
   isErr,
   parseFormula,
@@ -75,6 +76,8 @@ export interface SheetLabels {
   freezeRow: string;
   clearFormat: string;
   exportMenu: string;
+  downloadPdf: string;
+  pdfExportFailed: string;
   downloadXlsx: string;
   downloadCsv: string;
   copyCsv: string;
@@ -296,6 +299,23 @@ export function mountSheets({
   });
 
   const unbindExport = bindActionMenu(exportBtn, () => [
+    {
+      id: "pdf",
+      label: labels.downloadPdf,
+      desc: ".pdf",
+      onSelect: () => {
+        const html = exportSheetHtml(model, activeSheetId);
+        void runToolbarPdfExport({
+          button: exportBtn,
+          filename: sanitizeFileName(curSheet().name || model.title, "spreadsheet", "pdf"),
+          html,
+          defaultTitle: labels.exportMenu,
+          errorPrefix: labels.pdfExportFailed,
+          checkHtml: icon(ICONS.check),
+          idleHtml: icon(ICONS.download),
+        });
+      },
+    },
     {
       id: "xlsx",
       label: labels.downloadXlsx,

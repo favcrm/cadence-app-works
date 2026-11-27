@@ -604,6 +604,150 @@ export function exportDocHtml(title: string, blocks: readonly CfosDocBlock[]): s
   return buildDocHtmlShell(escapeHtml(title || "Untitled document"), css, `<main>${body}</main>`);
 }
 
+function pdfDecodeEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (_m, ent: string) => {
+    const lower = ent.toLowerCase();
+    if (lower.startsWith("#x")) return String.fromCodePoint(parseInt(lower.slice(2), 16));
+    if (lower.startsWith("#")) return String.fromCodePoint(parseInt(lower.slice(1), 10));
+    const table: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+    return table[lower] ?? " ";
+  });
+}
+
+function pdfReadAttr(attrs: string, name: string): string {
+  const re = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i");
+  const m = re.exec(attrs);
+  return pdfDecodeEntities(m ? (m[1] ?? m[2] ?? m[3] ?? "") : "");
+}
+
+function pdfSafeHref(url: string): string {
+  const trimmed = pdfDecodeEntities(url).trim();
+  if (/^https:\/\/\S+/i.test(trimmed)) return trimmed;
+  if (/^mailto:[^\s@?]+@[^\s@?]+\.[^\s@?]+$/i.test(trimmed)) return trimmed;
+  if (/^#[A-Za-z0-9._:-]+$/.test(trimmed)) return trimmed;
+  return "";
+}
+
+function pdfSanitizeInlineCss(style: string): string {
+  if (!style) return "";
+  if (
+    style.includes("/*") ||
+    style.includes("\\") ||
+    style.includes("{{") ||
+    style.includes("{%") ||
+    /url\s*\(|expression\s*\(|javascript:|vbscript:/i.test(style)
+  ) {
+    return "";
+  }
+  const safeParts: string[] = [];
+  for (const decl of style.split(";")) {
+    const idx = decl.indexOf(":");
+    if (idx <= 0) continue;
+    const prop = decl.slice(0, idx).trim().toLowerCase();
+    const val = decl.slice(idx + 1).trim();
+    if (!/^[a-z-]+$/.test(prop) || !val) continue;
+    if (/^(color|background-color|font-weight|font-style|text-decoration|text-align|font-size)$/.test(prop)) {
+      safeParts.push(`${prop}: ${val.replace(/"/g, "'")}`);
+    }
+  }
+  return safeParts.join("; ");
+}
+
+const PDF_ALLOWED_TAGS = new Set([
+  "h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "blockquote", "aside", "pre", "code",
+  "ul", "ol", "li", "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+  "strong", "b", "em", "i", "u", "s", "sub", "sup", "mark", "small", "span", "br", "hr", "a", "img",
+]);
+const PDF_VOID_TAGS = new Set(["br", "hr", "img"]);
+const PDF_DATA_IMG_RE = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/i;
+
+function sanitizeDocHtmlForPdf(raw: string): string {
+  const out: string[] = [];
+  const stack: string[] = [];
+  const re = /<[!][-][-][\s\S]*?[-][-]>|<(\/?)([a-z0-9]+)([^>]*)>|([^<]+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    if (m[4] !== undefined) {
+      out.push(escapeHtml(pdfDecodeEntities(m[4])));
+      continue;
+    }
+    const closing = m[1] === "/";
+    let tag = (m[2] ?? "").toLowerCase();
+    if (!tag) continue;
+    if (tag === "del" || tag === "strike") tag = "s";
+    const attrs = m[3] ?? "";
+    if (closing) {
+      const idx = stack.lastIndexOf(tag);
+      if (idx >= 0) {
+        while (stack.length > idx) out.push(`</${stack.pop()}>`);
+      }
+      continue;
+    }
+    if (tag === "img") {
+      const src = pdfReadAttr(attrs, "src").trim();
+      if (!PDF_DATA_IMG_RE.test(src)) continue;
+      const alt = pdfReadAttr(attrs, "alt");
+      out.push(`<img src="${escapeHtml(src)}"${alt ? ` alt="${escapeHtml(alt)}"` : ""}>`);
+      continue;
+    }
+    if (tag === "br" || tag === "hr") {
+      out.push(`<${tag}>`);
+      continue;
+    }
+    if (!PDF_ALLOWED_TAGS.has(tag)) continue;
+    if (tag === "a") {
+      const href = pdfSafeHref(pdfReadAttr(attrs, "href"));
+      if (!href) continue;
+      out.push(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">`);
+      stack.push("a");
+      continue;
+    }
+    const attrOut: string[] = [];
+    const cls = pdfReadAttr(attrs, "class").trim();
+    if (cls && /^[a-z0-9 _-]+$/i.test(cls)) attrOut.push(`class="${escapeHtml(cls)}"`);
+    const style = pdfSanitizeInlineCss(pdfReadAttr(attrs, "style"));
+    if (style) attrOut.push(`style="${escapeHtml(style)}"`);
+    if (tag === "td" || tag === "th") {
+      const align = pdfReadAttr(attrs, "align").toLowerCase();
+      if (align === "left" || align === "center" || align === "right") attrOut.push(`align="${align}"`);
+    }
+    const attrText = attrOut.length ? ` ${attrOut.join(" ")}` : "";
+    out.push(`<${tag}${attrText}>`);
+    if (!PDF_VOID_TAGS.has(tag)) stack.push(tag);
+  }
+  while (stack.length > 0) out.push(`</${stack.pop()}>`);
+  return out.join("");
+}
+
+export function exportDocPdfHtml(title: string, blocks: readonly CfosDocBlock[]): string {
+  const hasTitleBlock = blocks.some((b) => /\bdoc-title\b/i.test(b.html));
+  const safeTitle = (title || "Untitled document").trim();
+  const titleHtml = hasTitleBlock || !safeTitle ? "" : `<h1 class="doc-title">${escapeHtml(safeTitle)}</h1>`;
+  const body = sanitizeDocHtmlForPdf(cfosBlocksToHtml(blocks));
+  const css = [
+    "@page { size: a4 portrait; margin: 14mm; }",
+    "body { margin: 0; padding: 0; background: #ffffff; color: #1d1d20; font: 11pt/1.6 Inter, ui-sans-serif, system-ui, sans-serif; }",
+    "main { max-width: 100%; margin: 0 auto; }",
+    "h1.doc-title { font-size: 24pt; font-weight: 700; line-height: 1.15; margin: 0 0 16px; }",
+    "h1 { font-size: 18pt; font-weight: 700; margin: 18px 0 8px; }",
+    "h2 { font-size: 14.5pt; font-weight: 650; margin: 16px 0 6px; }",
+    "h3 { font-size: 12pt; font-weight: 650; margin: 12px 0 4px; }",
+    "p { margin: 0 0 9px; }",
+    "blockquote { border-left: 3px solid #e1632e; padding: 2px 0 2px 12px; color: #55555e; margin: 10px 0; }",
+    "aside { border-left: 3px solid #e1632e; background: #fff6f2; padding: 10px 14px; border-radius: 6px; margin: 12px 0; }",
+    "pre { background: #f4f4f6; padding: 10px 12px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 9.5pt; white-space: pre-wrap; }",
+    "code { background: #f4f4f6; padding: 1px 4px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.9em; }",
+    "table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }",
+    "thead { display: table-header-group; }",
+    "th, td { border: 1px solid #d4d4d8; padding: 6px 8px; text-align: left; vertical-align: top; }",
+    "th { background: #f4f4f6; font-weight: 650; }",
+    "hr { border: 0; border-top: 1px solid #d4d4d8; margin: 14px 0; }",
+    "img { max-width: 100%; height: auto; border-radius: 6px; }",
+    "a { color: #e1632e; }",
+  ].join("\n");
+  return buildDocHtmlShell(escapeHtml(safeTitle), css, `<main>${titleHtml}${body}</main>`);
+}
+
 export function docToMarkdown(title: string, blocks: readonly DocBlock[]): string {
   const lines: string[] = [];
   if (title.trim()) lines.push(`# ${title.trim()}`);
