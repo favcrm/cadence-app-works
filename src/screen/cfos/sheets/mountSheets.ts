@@ -307,7 +307,13 @@ export function mountSheets({
         const html = exportSheetHtml(model, activeSheetId);
         void runToolbarPdfExport({
           button: exportBtn,
-          filename: sanitizeFileName(curSheet().name || model.title, "spreadsheet", "pdf"),
+          filename: sanitizeFileName(
+            model.sheetOrder.length > 1 && curSheet().name && curSheet().name !== "Sheet1"
+              ? `${model.title || "spreadsheet"} - ${curSheet().name}`
+              : model.title || curSheet().name,
+            "spreadsheet",
+            "pdf",
+          ),
           html,
           defaultTitle: labels.exportMenu,
           errorPrefix: labels.pdfExportFailed,

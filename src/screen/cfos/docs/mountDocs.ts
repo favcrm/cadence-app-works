@@ -75,6 +75,13 @@ export interface DocLabels {
   downloadHtml: string;
   copied: string;
   emptyPlaceholder: string;
+  tableMenu: string;
+  tableInsert: string;
+  tableAddRow: string;
+  tableAddCol: string;
+  tableDelRow: string;
+  tableDelCol: string;
+  tableDelTable: string;
 }
 
 interface InlineFormat {
@@ -99,6 +106,7 @@ const BLOCK_TAGS = [
   "UL",
   "OL",
   "LI",
+  "TABLE",
   "DIV",
   "ASIDE",
 ];
@@ -257,6 +265,24 @@ export function sanitizePastedHtml(html: string): string {
       }
       if (tag === "UL" || tag === "OL") {
         result.appendChild(processList(node, ctx));
+        return;
+      }
+      if (tag === "TABLE") {
+        const tbl = document.createElement("table");
+        const tbody = document.createElement("tbody");
+        node.querySelectorAll("tr").forEach((tr, rIdx) => {
+          const outTr = document.createElement("tr");
+          tr.querySelectorAll("th, td").forEach((cell) => {
+            const outCell = document.createElement(cell.tagName === "TH" || rIdx === 0 ? "th" : "td");
+            appendInline(cell, outCell, fmtOf(cell, ctx));
+            outTr.appendChild(outCell);
+          });
+          if (outTr.children.length > 0) tbody.appendChild(outTr);
+        });
+        if (tbody.children.length > 0) {
+          tbl.appendChild(tbody);
+          result.appendChild(tbl);
+        }
         return;
       }
       if (["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "PRE"].includes(tag)) {
@@ -871,6 +897,148 @@ export function mountDocs({
     emit();
   });
 
+  const activeTableCell = (): { cell: HTMLTableCellElement; row: HTMLTableRowElement; table: HTMLTableElement } | null => {
+    const sel = window.getSelection();
+    let node: Node | null | undefined = sel?.anchorNode ?? null;
+    while (node && node !== editor) {
+      if (isElement(node) && (node.tagName === "TD" || node.tagName === "TH")) {
+        const cell = node as HTMLTableCellElement;
+        const row = cell.closest("tr");
+        const table = cell.closest("table");
+        if (row && table && editor.contains(table)) return { cell, row, table };
+        return null;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  };
+
+  const tableBtn = iconBtn(ICONS.table, labels.tableMenu, () => {});
+  tableBtn.addEventListener("mousedown", () => {
+    savedRange = getRange();
+  });
+  const unbindTable = bindActionMenu(tableBtn, () => {
+    const cur = activeTableCell();
+    const items = [
+      {
+        id: "tbl-insert",
+        label: labels.tableInsert,
+        onSelect: () => {
+          restoreRange();
+          const tbl = document.createElement("table");
+          tbl.setAttribute("data-block-id", newBlockId());
+          const thead = document.createElement("thead");
+          const htr = document.createElement("tr");
+          for (let c = 1; c <= 3; c++) {
+            const th = document.createElement("th");
+            th.textContent = `Col ${c}`;
+            htr.appendChild(th);
+          }
+          thead.appendChild(htr);
+          tbl.appendChild(thead);
+          const tbody = document.createElement("tbody");
+          for (let r = 0; r < 2; r++) {
+            const tr = document.createElement("tr");
+            for (let c = 0; c < 3; c++) {
+              const td = document.createElement("td");
+              td.appendChild(document.createElement("br"));
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          }
+          tbl.appendChild(tbody);
+          const after = document.createElement("p");
+          after.setAttribute("data-block-id", newBlockId());
+          after.appendChild(document.createElement("br"));
+          const anchorBlock = currentBlock();
+          if (anchorBlock && anchorBlock.parentElement === editor) {
+            anchorBlock.after(tbl, after);
+          } else {
+            editor.append(tbl, after);
+          }
+          const firstCell = tbl.querySelector("tbody td") ?? htr.firstElementChild;
+          if (firstCell) selectNode(firstCell);
+          editor.focus();
+          emit();
+        },
+      },
+    ];
+    if (cur) {
+      items.push(
+        {
+          id: "tbl-add-row",
+          label: labels.tableAddRow,
+          onSelect: () => {
+            const cols = Math.max(1, cur.row.children.length);
+            const nextRow = document.createElement("tr");
+            for (let i = 0; i < cols; i++) {
+              const td = document.createElement("td");
+              td.appendChild(document.createElement("br"));
+              nextRow.appendChild(td);
+            }
+            cur.row.after(nextRow);
+            if (nextRow.firstElementChild) selectNode(nextRow.firstElementChild);
+            editor.focus();
+            emit();
+          },
+        },
+        {
+          id: "tbl-add-col",
+          label: labels.tableAddCol,
+          onSelect: () => {
+            const idx = Array.from(cur.row.children).indexOf(cur.cell);
+            cur.table.querySelectorAll("tr").forEach((tr) => {
+              const isHead = tr.parentElement?.tagName === "THEAD" || tr.firstElementChild?.tagName === "TH";
+              const cell = document.createElement(isHead ? "th" : "td");
+              if (isHead) cell.textContent = "Col";
+              else cell.appendChild(document.createElement("br"));
+              const ref = idx >= 0 ? tr.children[idx] : null;
+              if (ref) ref.after(cell);
+              else tr.appendChild(cell);
+            });
+            editor.focus();
+            emit();
+          },
+        },
+        {
+          id: "tbl-del-row",
+          label: labels.tableDelRow,
+          onSelect: () => {
+            const totalRows = cur.table.querySelectorAll("tr").length;
+            if (totalRows <= 1) cur.table.remove();
+            else cur.row.remove();
+            editor.focus();
+            emit();
+          },
+        },
+        {
+          id: "tbl-del-col",
+          label: labels.tableDelCol,
+          onSelect: () => {
+            const idx = Array.from(cur.row.children).indexOf(cur.cell);
+            if (idx < 0) return;
+            cur.table.querySelectorAll("tr").forEach((tr) => {
+              tr.children[idx]?.remove();
+            });
+            if (!cur.table.querySelector("th, td")) cur.table.remove();
+            editor.focus();
+            emit();
+          },
+        },
+        {
+          id: "tbl-del",
+          label: labels.tableDelTable,
+          onSelect: () => {
+            cur.table.remove();
+            editor.focus();
+            emit();
+          },
+        },
+      );
+    }
+    return items;
+  });
+
   const exportBtn = iconBtn(ICONS.download, labels.exportMenu, () => {});
   const unbindExport = bindActionMenu(exportBtn, () => [
     {
@@ -955,7 +1123,7 @@ export function mountDocs({
     group("p1", [alignSegment]),
     group("p1", [ulBtn, olBtn]),
     group("p3", [outdentBtn, indentBtn]),
-    group("p2", [linkBtn, imageBtn]),
+    group("p2", [linkBtn, imageBtn, tableBtn]),
     group("p3", [hrBtn, clearBtn]),
     group(null, [exportBtn]),
   ]);
@@ -1190,6 +1358,7 @@ export function mountDocs({
       window.removeEventListener("scroll", onWindowScroll, true);
       window.removeEventListener("resize", onWindowScroll);
       unbindExport();
+      unbindTable();
       styleSel.destroy();
       fontSel.destroy();
       sizeSel.destroy();

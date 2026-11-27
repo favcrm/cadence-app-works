@@ -1700,6 +1700,67 @@ table.cfos-grid td {
   background: color-mix(in srgb, var(--color-ink-700) 25%, transparent);
 }
 
+.cfos-doc-page table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 0.9375rem;
+}
+
+.cfos-doc-page th,
+.cfos-doc-page td {
+  border: 1px solid #d4d4d8;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 64px;
+}
+
+.cfos-doc-page th {
+  font-weight: 600;
+  background: #f4f4f5;
+}
+
+.works-panel-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-ink-700);
+  background: color-mix(in srgb, var(--color-ink-900) 60%, transparent);
+}
+
+.works-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.works-history-list {
+  display: grid;
+  gap: 6px;
+}
+
+.works-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-ink-800);
+}
+
+.works-submit-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
 .works-list.is-drag-over {
   outline: 2px dashed var(--color-accent, #f6821f);
   outline-offset: 6px;

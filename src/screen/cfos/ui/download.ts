@@ -129,6 +129,103 @@ export async function triggerPdfExport(
   });
 }
 
+export type SubmitDocumentPayload =
+  | {
+      title: string;
+      label: string;
+      kind: "pdf";
+      html: string;
+      paper?: "a4" | "letter";
+      submit: boolean;
+    }
+  | {
+      title: string;
+      label: string;
+      kind: "docx" | "xlsx" | "pptx";
+      bytes: Uint8Array;
+      submit: boolean;
+    };
+
+export async function triggerSubmitDocument(
+  payload: SubmitDocumentPayload,
+): Promise<{ ok: true; id: string; stage: string } | { ok: false; error: string }> {
+  const parentWin = typeof window !== "undefined" ? window.parent : null;
+  if (!parentWin || parentWin === window || typeof parentWin.postMessage !== "function") {
+    return { ok: false, error: "Documents submission requires the hosted Cadence host." };
+  }
+  const requestId = `sub_${Date.now().toString(36)}_${(++downloadSeq).toString(36)}`;
+  return new Promise((resolve) => {
+    let settled = false;
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+    };
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as Record<string, unknown> | null;
+      if (
+        event.source === parentWin &&
+        data &&
+        typeof data === "object" &&
+        data.type === "cadence-submit-document-ack" &&
+        data.requestId === requestId
+      ) {
+        settled = true;
+        cleanup();
+        if (data.ok === true && typeof data.id === "string") {
+          resolve({
+            ok: true,
+            id: data.id,
+            stage: typeof data.stage === "string" ? data.stage : payload.submit ? "in_review" : "draft",
+          });
+        } else {
+          resolve({
+            ok: false,
+            error: typeof data.error === "string" && data.error ? data.error : "Document submission failed.",
+          });
+        }
+      }
+    };
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({ ok: false, error: "Document submission timed out." });
+    }, PDF_EXPORT_TIMEOUT_MS);
+    window.addEventListener("message", onMessage);
+    if (payload.kind === "pdf") {
+      parentWin.postMessage(
+        {
+          type: "cadence-submit-document",
+          requestId,
+          title: payload.title,
+          label: payload.label,
+          kind: "pdf",
+          html: payload.html,
+          ...(payload.paper ? { paper: payload.paper } : {}),
+          submit: payload.submit,
+        },
+        "*",
+      );
+      return;
+    }
+    const copy = new Uint8Array(new ArrayBuffer(payload.bytes.byteLength));
+    copy.set(payload.bytes);
+    parentWin.postMessage(
+      {
+        type: "cadence-submit-document",
+        requestId,
+        title: payload.title,
+        label: payload.label,
+        kind: payload.kind,
+        bytes: copy.buffer,
+        submit: payload.submit,
+      },
+      "*",
+      [copy.buffer],
+    );
+  });
+}
+
 export async function runToolbarPdfExport(opts: {
   button: HTMLButtonElement;
   filename: string;

@@ -13,11 +13,12 @@ export interface QueryArgs {
   kind?: Kind;
   review?: string;
   sort?: "updated" | "name";
+  trashed?: boolean;
 }
 
 export interface CallArgs {
   "works.query": QueryArgs;
-  "works.get": { id: string };
+  "works.get": { id: string; include_revisions?: boolean; revision?: number };
   "works.create": { kind: Kind; title: string; content: unknown; idempotency_key: string };
   "works.patch": {
     id: string;
@@ -46,8 +47,8 @@ export interface SlotArgs {
 }
 
 export const CALL_FIELDS: Record<keyof CallArgs, readonly string[]> = {
-  "works.query": ["text", "kind", "review", "export", "tag", "owner", "sort"],
-  "works.get": ["id"],
+  "works.query": ["text", "kind", "review", "export", "tag", "owner", "sort", "trashed"],
+  "works.get": ["id", "include_revisions", "revision"],
   "works.create": ["kind", "title", "content", "tags", "idempotency_key"],
   "works.patch": ["id", "if_revision", "operations", "idempotency_key"],
   "works.trash": ["id", "if_revision", "idempotency_key"],

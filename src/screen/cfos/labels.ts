@@ -56,6 +56,13 @@ export function useDocLabels(): DocLabels {
       downloadHtml: t("cfos.download_html"),
       copied: t("cfos.copied"),
       emptyPlaceholder: t("cfos.doc_empty_placeholder"),
+      tableMenu: t("cfos.doc_table"),
+      tableInsert: t("cfos.doc_table_insert"),
+      tableAddRow: t("cfos.doc_table_add_row"),
+      tableAddCol: t("cfos.doc_table_add_col"),
+      tableDelRow: t("cfos.doc_table_del_row"),
+      tableDelCol: t("cfos.doc_table_del_col"),
+      tableDelTable: t("cfos.doc_table_del_table"),
     }),
     [t],
   );
