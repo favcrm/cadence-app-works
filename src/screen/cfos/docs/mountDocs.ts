@@ -25,6 +25,7 @@ import {
   worksDocToCfos,
   type CfosDocBlock,
 } from "./codec";
+import { buildDocxBytes } from "./docx";
 
 export interface DocLabels {
   blockStyle: string;
@@ -66,6 +67,7 @@ export interface DocLabels {
   clearFormat: string;
   exportMenu: string;
   copyMarkdown: string;
+  downloadDocx: string;
   downloadMarkdown: string;
   downloadHtml: string;
   copied: string;
@@ -868,6 +870,19 @@ export function mountDocs({
 
   const exportBtn = iconBtn(ICONS.download, labels.exportMenu, () => {});
   const unbindExport = bindActionMenu(exportBtn, () => [
+    {
+      id: "dl-docx",
+      label: labels.downloadDocx,
+      desc: ".docx",
+      onSelect: async () => {
+        const bytes = await buildDocxBytes(currentTitle, collectCfosBlocks());
+        triggerDownload(
+          sanitizeFileName(currentTitle, "document", "docx"),
+          bytes,
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        );
+      },
+    },
     {
       id: "copy-md",
       label: labels.copyMarkdown,

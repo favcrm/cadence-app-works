@@ -16,6 +16,7 @@ export const messages = {
 
   "action.back": { en: "Back to Works", "zh-TW": "返回列表" },
   "action.new": { en: "New", "zh-TW": "新增" },
+  "action.import": { en: "Import", "zh-TW": "匯入" },
   "action.new_doc": { en: "+ Doc", "zh-TW": "+ 文件" },
   "action.new_sheet": { en: "+ Sheet", "zh-TW": "+ 試算表" },
   "action.new_deck": { en: "+ Deck", "zh-TW": "+ 簡報" },
@@ -175,6 +176,27 @@ export const messages = {
     en: "Review and export are not available in this workspace yet.",
     "zh-TW": "此工作區尚未支援審閱與匯出。",
   },
+  "import.busy": { en: "Importing…", "zh-TW": "正在匯入…" },
+  "import.error_generic": {
+    en: "Could not import this file. Check that it is a valid Word, Excel, PowerPoint, CSV, or Markdown file.",
+    "zh-TW": "無法匯入此檔案，請確認為有效的 Word、Excel、PowerPoint、CSV 或 Markdown 檔案。",
+  },
+  "import.error_unsupported": {
+    en: "Unsupported file format. Supported formats: .docx, .xlsx, .pptx, .csv, .md, .txt.",
+    "zh-TW": "不支援的檔案格式，支援格式：.docx、.xlsx、.pptx、.csv、.md、.txt。",
+  },
+  "import.error_too_large": {
+    en: "This file is too large to import (maximum 10 MiB).",
+    "zh-TW": "檔案過大，無法匯入（上限 10 MiB）。",
+  },
+  "import.error_macros": {
+    en: "Macro-enabled Office files cannot be imported.",
+    "zh-TW": "無法匯入包含巨集的 Office 檔案。",
+  },
+  "import.error_encrypted": {
+    en: "Password-protected Office files cannot be imported.",
+    "zh-TW": "無法匯入已加密或受密碼保護的 Office 檔案。",
+  },
 
   "editor.remove": { en: "Delete", "zh-TW": "刪除" },
   "editor.type_heading": { en: "Heading", "zh-TW": "標題" },
@@ -200,6 +222,8 @@ export const messages = {
   "cfos.insert_image": { en: "Insert image", "zh-TW": "插入圖片" },
   "cfos.download_md": { en: "Download Markdown", "zh-TW": "下載 Markdown" },
   "cfos.download_html": { en: "Download HTML", "zh-TW": "下載 HTML" },
+  "cfos.download_docx": { en: "Download Word", "zh-TW": "下載 Word" },
+  "cfos.download_pptx": { en: "Download PowerPoint", "zh-TW": "下載 PowerPoint" },
   "cfos.ctx_cut": { en: "Cut", "zh-TW": "剪下" },
   "cfos.ctx_copy": { en: "Copy", "zh-TW": "複製" },
   "cfos.ctx_paste": { en: "Paste", "zh-TW": "貼上" },
