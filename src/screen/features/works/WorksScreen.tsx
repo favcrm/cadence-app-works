@@ -5,7 +5,8 @@ import type { Kind } from "../../bridge/operations";
 import { patchRoute } from "../../bridge/route";
 import { scopeError, useCanvasReadOnly, useScope } from "../../bridge/scope";
 import { starterDraft } from "../../cfos/labels";
-import { kindSection, sectionKind, type WorksRow } from "../../domain/works";
+import { ImportError, importFileToWorksDraft } from "../../cfos/import/ooxml";
+import { kindSection, sectionKind, validateDraft, type WorksRow } from "../../domain/works";
 import { classify, createItem, restoreItem } from "./api";
 import { DetailView } from "./DetailView";
 import { ListView } from "./ListView";
@@ -42,6 +43,7 @@ function Mounted() {
   const [restoreFailure, setRestoreFailure] = useState<string | null>(null);
   const [navFailure, setNavFailure] = useState<string | null>(null);
   const [creatingKind, setCreatingKind] = useState<Kind | null>(null);
+  const [importing, setImporting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -79,6 +81,46 @@ function Mounted() {
 
   const goList = () => navigate({ ...base, view: "list", record_id: null });
   const open = (row: Pick<WorksRow, "id">) => navigate({ ...base, view: "list", record_id: row.id });
+
+  const importErrorMessage = (error: unknown): string => {
+    if (error instanceof ImportError) {
+      if (error.code === "too_large") return t("import.error_too_large");
+      if (error.code === "unsupported") return t("import.error_unsupported");
+      if (error.code === "macros") return t("import.error_macros");
+      if (error.code === "encrypted") return t("import.error_encrypted");
+      return t("import.error_generic");
+    }
+    const failure = classify(error);
+    return failure.kind === "message"
+      ? t(failure.key)
+      : failure.kind === "unavailable"
+        ? t("error.forbidden")
+        : t("import.error_generic");
+  };
+
+  const handleImportFile = async (file: File) => {
+    if (importing || creatingKind !== null || canvas) return;
+    setNavFailure(null);
+    setImporting(true);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const draft = await importFileToWorksDraft(file.name, bytes);
+      const problem = validateDraft(draft.title, draft.content);
+      if (problem) {
+        setNavFailure(t(`problem.${problem}`));
+        return;
+      }
+      const item = await createItem(scope, draft.kind, draft.title, draft.content);
+      setRefreshKey((n) => n + 1);
+      await withoutLeaveWarning(() =>
+        patchRoute({ section: kindSection(item.kind), view: "list", record_id: item.id }),
+      );
+    } catch (error: unknown) {
+      setNavFailure(importErrorMessage(error));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const quickCreate = (targetKind: Kind) => {
     if (creatingKind !== null || canvas) return;
@@ -187,10 +229,12 @@ function Mounted() {
             canvas={canvas}
             canCreate={can("works.create")}
             creatingKind={creatingKind}
+            importing={importing}
             refreshKey={refreshKey}
             onOpen={open}
             onQuickCreate={quickCreate}
             onNew={() => navigate({ ...base, view: "new", record_id: null })}
+            onImportFile={(file) => void handleImportFile(file)}
           />
         </>
       )}

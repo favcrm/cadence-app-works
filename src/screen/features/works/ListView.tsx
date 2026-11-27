@@ -1,5 +1,5 @@
 import { Button, DataTable, EmptyState, ErrorNotice, Loading, Select } from "@cadence/screen-ui";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { Kind } from "../../bridge/operations";
 import type { DisplayScope } from "../../bridge/scope";
 import type { WorksRow } from "../../domain/works";
@@ -13,10 +13,12 @@ export interface ListProps {
   canvas: boolean;
   canCreate: boolean;
   creatingKind: Kind | null;
+  importing: boolean;
   refreshKey: number;
   onOpen: (row: WorksRow) => void;
   onQuickCreate: (kind: Kind) => void;
   onNew: () => void;
+  onImportFile: (file: File) => void;
 }
 
 export function ListView({
@@ -25,12 +27,15 @@ export function ListView({
   canvas,
   canCreate,
   creatingKind,
+  importing,
   refreshKey,
   onOpen,
   onQuickCreate,
   onNew,
+  onImportFile,
 }: ListProps) {
   const { t } = useLocale();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<WorksRow[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [draft, setDraft] = useState("");
@@ -77,7 +82,13 @@ export function ListView({
     { value: "name", label: t("sort.name") },
   ];
 
-  const busy = creatingKind !== null;
+  const busy = creatingKind !== null || importing;
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) onImportFile(file);
+  };
 
   return (
     <section className="works-list">
@@ -143,6 +154,23 @@ export function ListView({
               <Button size="sm" variant="ghost" disabled={busy} onClick={onNew}>
                 {t("action.new")}
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={importing}
+                disabled={busy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {importing ? t("import.busy") : t("action.import")}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.xlsx,.pptx,.csv,.md,.txt"
+                aria-label={t("action.import")}
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+              />
             </>
           ) : null}
         </div>

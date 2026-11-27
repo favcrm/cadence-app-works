@@ -35,7 +35,10 @@ import {
   makeEngine,
   parseRangeText,
 } from "../src/screen/cfos/sheets/formula.ts";
+import { buildDocxBytes } from "../src/screen/cfos/docs/docx.ts";
+import { ImportError, importFileToWorksDraft, readZipEntries } from "../src/screen/cfos/import/ooxml.ts";
 import { buildXlsxBytes } from "../src/screen/cfos/sheets/xlsx.ts";
+import { buildPptxBytes } from "../src/screen/cfos/slides/pptx.ts";
 import {
   SLIDE_SIDECAR_MARKER,
   cfosDeckToWorks,
@@ -391,4 +394,258 @@ test("regression: exported HTML keeps full document shell while built client.js 
   }
   const clientJs = readFileSync(new URL("../app/screens/works/client.js", import.meta.url), "utf8");
   assert.equal(/<\/?(?:head|body|html)\b/i.test(clientJs), false);
+});
+
+async function parseZipEntries(archive) {
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const decoder = new TextDecoder();
+  const eocdOffset = archive.byteLength - 22;
+  assert.equal(view.getUint32(eocdOffset, true), 0x06054b50);
+  const count = view.getUint16(eocdOffset + 10, true);
+  const centralSize = view.getUint32(eocdOffset + 12, true);
+  const centralOffset = view.getUint32(eocdOffset + 16, true);
+  assert.equal(centralOffset + centralSize, eocdOffset);
+
+  const entries = new Map();
+  let cursor = centralOffset;
+  let localCursor = 0;
+  for (let i = 0; i < count; ++i) {
+    assert.equal(view.getUint32(cursor, true), 0x02014b50);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const uncompressedSize = view.getUint32(cursor + 24, true);
+    const nameLen = view.getUint16(cursor + 28, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    assert.equal(localOffset, localCursor);
+    const name = decoder.decode(archive.subarray(cursor + 46, cursor + 46 + nameLen));
+    cursor += 46 + nameLen;
+
+    assert.equal(view.getUint32(localOffset, true), 0x04034b50);
+    const localNameLen = view.getUint16(localOffset + 26, true);
+    const dataStart = localOffset + 30 + localNameLen;
+    const compressed = archive.subarray(dataStart, dataStart + compressedSize);
+    const inflatedStream = new ReadableStream({
+      start(ctrl) {
+        ctrl.enqueue(compressed);
+        ctrl.close();
+      },
+    }).pipeThrough(new DecompressionStream("deflate-raw"));
+    const inflated = new Uint8Array(await new Response(inflatedStream).arrayBuffer());
+    assert.equal(inflated.byteLength, uncompressedSize);
+    entries.set(name, inflated);
+    localCursor = dataStart + compressedSize + 16;
+  }
+  assert.equal(cursor, eocdOffset);
+  return entries;
+}
+
+test("pptx exporter builds valid PresentationML archive with logo expansion, cover gradient, cards, and media", async () => {
+  const tinyPngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+  const cover = makeCfosSlideTemplate("cover", 0);
+  const twoCol = makeCfosSlideTemplate("twoCol", 1);
+  const mediaSlide = {
+    id: "s_media",
+    background: { color: "#FFFFFF", inset: false },
+    blocks: [
+      {
+        id: "b_img",
+        type: "image",
+        x: 60,
+        y: 80,
+        w: 400,
+        h: 300,
+        props: {
+          src: `data:image/png;base64,${tinyPngBase64}`,
+          fit: "contain",
+          alt: "Tiny square",
+        },
+      },
+      {
+        id: "b_arrow",
+        type: "arrow",
+        x: 500,
+        y: 120,
+        props: { x1: 500, y1: 120, x2: 700, y2: 200, color: "tangerine", label: "Flow" },
+      },
+    ],
+  };
+
+  const bytes = await buildPptxBytes({
+    themeVersion: "1",
+    slides: [cover, twoCol, mediaSlide],
+  });
+  const entries = await parseZipEntries(bytes);
+  const decoder = new TextDecoder();
+
+  for (const required of [
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "ppt/presentation.xml",
+    "ppt/_rels/presentation.xml.rels",
+    "ppt/slides/slide1.xml",
+    "ppt/slides/slide2.xml",
+    "ppt/slides/slide3.xml",
+    "ppt/media/image1.png",
+  ]) {
+    assert.ok(entries.has(required), `missing ZIP entry ${required}`);
+  }
+
+  const contentTypesXml = decoder.decode(entries.get("[Content_Types].xml"));
+  assert.match(contentTypesXml, /Extension="png" ContentType="image\/png"/);
+  assert.match(contentTypesXml, /PartName="\/ppt\/slides\/slide3\.xml"/);
+
+  const slide1Xml = decoder.decode(entries.get("ppt/slides/slide1.xml"));
+  assert.match(slide1Xml, /Cover gradient/);
+  assert.match(slide1Xml, /a:gradFill/);
+  assert.match(slide1Xml, />Works</);
+  assert.match(slide1Xml, /prst="ellipse"/);
+
+  const slide3Xml = decoder.decode(entries.get("ppt/slides/slide3.xml"));
+  assert.match(slide3Xml, /<p:pic>/);
+  assert.match(slide3Xml, /r:embed="rId2"/);
+  assert.match(slide3Xml, /<p:cxnSp>/);
+  assert.match(slide3Xml, />Flow</);
+
+  await assert.rejects(
+    () => buildPptxBytes({ slides: Array.from({ length: 501 }, () => ({ blocks: [] })) }),
+    /supports at most 500/,
+  );
+});
+
+test("pptx exporter writes speakerNotes slides and CJK East Asian font fallbacks", async () => {
+  const cover = makeCfosSlideTemplate("cover", 0);
+  const deck = { themeVersion: "1", slides: [cover] };
+  const notes = { [cover.id]: "開場說明：歡迎使用 Works" };
+  const bytes = await buildPptxBytes(deck, notes);
+  const entries = await parseZipEntries(bytes);
+  const decoder = new TextDecoder();
+
+  assert.ok(entries.has("ppt/notesSlides/notesSlide1.xml"));
+  assert.ok(entries.has("ppt/notesSlides/_rels/notesSlide1.xml.rels"));
+  const slideRels = decoder.decode(entries.get("ppt/slides/_rels/slide1.xml.rels"));
+  assert.match(slideRels, /notesSlides\/notesSlide1\.xml/);
+  const notesXml = decoder.decode(entries.get("ppt/notesSlides/notesSlide1.xml"));
+  assert.match(notesXml, /歡迎使用 Works/);
+  assert.match(decoder.decode(entries.get("ppt/slides/slide1.xml")), /Noto Sans TC/);
+  assert.match(decoder.decode(entries.get("docProps/app.xml")), /<Notes>1<\/Notes>/);
+
+  const imported = await importFileToWorksDraft("中文簡報.pptx", bytes);
+  assert.equal(imported.kind, "deck");
+  assert.equal(validateDraft(imported.title, imported.content), null);
+  assert.equal(imported.content.slides.length, 1);
+  assert.match(imported.content.slides[0].notes ?? "", /歡迎使用 Works/);
+});
+
+test("docx exporter and importer round-trip headings, lists, links, inline formatting, and embedded PNG", async () => {
+  const tinyPngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+  const blocks = [
+    { id: "b_1", html: "<h1>Project Spec</h1>" },
+    {
+      id: "b_2",
+      html: '<p><strong>Bold</strong> and <em>italic</em> with <a href="https://example.com">link</a>.</p>',
+    },
+    { id: "b_3", html: "<ul><li>First item</li><li>Second item</li></ul>" },
+    { id: "b_4", html: `<p><img src="data:image/png;base64,${tinyPngBase64}" alt="dot"></p>` },
+  ];
+
+  const docxBytes = await buildDocxBytes("Project Spec", blocks);
+  const entries = await parseZipEntries(docxBytes);
+  const decoder = new TextDecoder();
+  for (const req of [
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "docProps/core.xml",
+    "word/document.xml",
+    "word/_rels/document.xml.rels",
+    "word/styles.xml",
+    "word/numbering.xml",
+    "word/media/image1.png",
+  ]) {
+    assert.ok(entries.has(req), `missing DOCX entry ${req}`);
+  }
+  const docXml = decoder.decode(entries.get("word/document.xml"));
+  assert.match(docXml, /Heading1/);
+  assert.match(docXml, /<w:b\/>/);
+  assert.match(docXml, /<w:hyperlink /);
+  assert.match(docXml, /<pic:pic>/);
+
+  const imported = await importFileToWorksDraft("Project-Spec.docx", docxBytes);
+  assert.equal(imported.kind, "doc");
+  assert.equal(imported.title, "Project Spec");
+  assert.equal(validateDraft(imported.title, imported.content), null);
+  const restored = worksDocToCfos(imported.content.blocks);
+  assert.ok(restored.some((b) => /<h1/.test(b.html) && b.html.includes("Project Spec")));
+  assert.ok(restored.some((b) => b.html.includes("<strong>Bold</strong>")));
+  assert.ok(restored.some((b) => b.html.includes("https://example.com")));
+});
+
+test("xlsx, csv, and markdown importers produce valid Works drafts and reject unsafe archives", async () => {
+  const wb = worksSheetToCfos(
+    {
+      kind: "sheet",
+      columns: ["Item", "Amount"],
+      rows: [
+        ["Server", 120],
+        ["Total", "=SUM(B1:B1)"],
+      ],
+    },
+    "Infra Costs",
+  );
+  const xlsxBytes = await buildXlsxBytes(wb);
+  const importedSheet = await importFileToWorksDraft("Infra-Costs.xlsx", xlsxBytes);
+  assert.equal(importedSheet.kind, "sheet");
+  assert.equal(validateDraft(importedSheet.title, importedSheet.content), null);
+  const restoredWb = worksSheetToCfos(importedSheet.content, importedSheet.title);
+  const s1 = restoredWb.cells[restoredWb.sheetOrder[0]];
+  assert.equal(s1.A1.value, "Item");
+  assert.equal(s1.B1.value, "Amount");
+  assert.equal(s1.A2.value, "Server");
+  assert.equal(s1.B3.value, "=SUM(B1:B1)");
+
+  const csvDraft = await importFileToWorksDraft(
+    "sales.csv",
+    new TextEncoder().encode("Product,Qty\r\nWidget,5\r\n"),
+  );
+  assert.equal(csvDraft.kind, "sheet");
+  assert.equal(validateDraft(csvDraft.title, csvDraft.content), null);
+  assert.equal(csvDraft.content.rows[1][0], "Widget");
+
+  const mdDraft = await importFileToWorksDraft(
+    "notes.md",
+    new TextEncoder().encode("# Q4 Notes\n\n## Goals\n\n> Ship clean imports\n"),
+  );
+  assert.equal(mdDraft.kind, "doc");
+  assert.equal(mdDraft.title, "Q4 Notes");
+  assert.equal(validateDraft(mdDraft.title, mdDraft.content), null);
+
+  // Refusals
+  await assert.rejects(
+    () => importFileToWorksDraft("macro.xlsm", new Uint8Array([1, 2, 3])),
+    (e) => e instanceof ImportError && e.code === "macros",
+  );
+  await assert.rejects(
+    () => importFileToWorksDraft("bad.docx", new Uint8Array([1, 2, 3, 4])),
+    (e) => e instanceof ImportError && e.code === "malformed",
+  );
+  await assert.rejects(
+    () => importFileToWorksDraft("huge.docx", new Uint8Array(10 * 1024 * 1024 + 1)),
+    (e) => e instanceof ImportError && e.code === "too_large",
+  );
+  await assert.rejects(
+    () => importFileToWorksDraft("script.exe", new Uint8Array([1, 2, 3])),
+    (e) => e instanceof ImportError && e.code === "unsupported",
+  );
+
+  // Path traversal and encryption flags inside synthetic ZIP central directory
+  const fakeDocx = await buildDocxBytes("Safe", [{ id: "b_1", html: "<p>Hello</p>" }]);
+  const patchedEncrypted = new Uint8Array(fakeDocx);
+  const eocdOff = patchedEncrypted.length - 22;
+  const cdOff = new DataView(patchedEncrypted.buffer).getUint32(eocdOff + 16, true);
+  // Set bit 0 (encrypted) in first CD entry flags (offset + 8)
+  patchedEncrypted[cdOff + 8] |= 0x01;
+  await assert.rejects(
+    () => readZipEntries(patchedEncrypted),
+    (e) => e instanceof ImportError && e.code === "encrypted",
+  );
 });

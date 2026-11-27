@@ -22,6 +22,7 @@ import {
   type CfosSlide,
   type SlideTemplateKind,
 } from "./codec";
+import { buildPptxBytes } from "./pptx";
 import {
   C,
   COMPONENTS,
@@ -73,6 +74,8 @@ export interface SlidesLabels {
   deleteBlock: string;
   duplicateBlock: string;
   uploadImage: string;
+  exportMenu: string;
+  exportPptx: string;
   exportHtml: string;
   fieldNotes: string;
   toggleSlidesRail: string;
@@ -171,10 +174,35 @@ export function mountSlides({
   const redoBtn = iconBtn(ICONS.redo, labels.redo, () => redo());
   const editBtn = iconBtn(ICONS.pencil, labels.editMode, () => toggleEdit());
   const presentBtn = iconBtn(ICONS.expand, labels.presentMode, () => togglePresent());
-  const exportBtn = iconBtn(ICONS.download, labels.exportHtml, () => {
-    const html = exportDeckHtml(deckTitle, deck);
-    triggerDownload(sanitizeFileName(deckTitle, "deck", "html"), html, "text/html;charset=utf-8");
-  });
+  const exportBtn = iconBtn(ICONS.download, labels.exportMenu, () => {});
+  const unbindExport = bindActionMenu(exportBtn, () => [
+    {
+      id: "pptx",
+      label: labels.exportPptx,
+      desc: ".pptx",
+      onSelect: async () => {
+        const bytes = await buildPptxBytes(deck, speakerNotes);
+        triggerDownload(
+          sanitizeFileName(deckTitle, "deck", "pptx"),
+          bytes,
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        );
+      },
+    },
+    {
+      id: "html",
+      label: labels.exportHtml,
+      desc: ".html",
+      onSelect: () => {
+        const html = exportDeckHtml(deckTitle, deck);
+        triggerDownload(
+          sanitizeFileName(deckTitle, "deck", "html"),
+          html,
+          "text/html;charset=utf-8",
+        );
+      },
+    },
+  ]);
   const toggleRailBtn = iconBtn(ICONS.layers, labels.toggleSlidesRail, () => {
     if (readOnly || presentMode) return;
     if (!editMode) editMode = true;
@@ -1161,6 +1189,7 @@ export function mountSlides({
       document.removeEventListener("keydown", onKeyDown);
       ro.disconnect();
       unbindAddSlide();
+      unbindExport();
       host.replaceChildren();
     },
   };
